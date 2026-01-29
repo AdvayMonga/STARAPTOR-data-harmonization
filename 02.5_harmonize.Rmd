@@ -1,0 +1,192 @@
+# Setup
+```{r}
+rm(list = ls())
+gc()
+
+library(devtools)
+if (!require("ComBatFamQC", quietly = TRUE)) {
+  install_github("Zheng206/ComBatFamQC", build_vignettes = TRUE)
+}
+
+library(ComBatFamQC)
+library(ggplot2)
+library(dplyr)
+
+setwd("/Users/advaymonga/Desktop/STARAPTOR")
+```
+
+# Example Vignettes
+```{r}
+vignette("ComBatQC")
+vignette("Post-Harmonization")
+```
+
+# Load Data
+```{r}
+df_u <- read.csv("data/u_image_features.csv")
+df_c <- read.csv("data/c_image_features.csv")
+```
+
+# Prepare Data for Harmonization
+```{r}
+feature_cols <- setdiff(
+  colnames(df_u), 
+  c("Subject_ID", "eGFR_12M", "DGF")
+)
+covariates <- c("eGFR_12M", "DGF")
+
+df_u_prep <- df_u[, c("Subject_ID", feature_cols, 
+                       "eGFR_12M", "DGF")]
+df_c_prep <- df_c[, c("Subject_ID", feature_cols, 
+                       "eGFR_12M", "DGF")]
+
+df_u_prep$batch <- "U"
+df_c_prep$batch <- "C"
+combat_input <- rbind(df_u_prep, df_c_prep)
+
+cat(" Dimensions: ", dim(combat_input), "\n")
+```
+
+# Batch Effect Diagnostics
+```{r}
+batch_diagnostics <- visual_prep(
+  df = combat_input,
+  type = "lm",
+  features = feature_cols,
+  batch = "batch",
+  covariates = covariates
+)
+
+comfam_shiny(batch_diagnostics)
+```
+
+# ComBat Harmonization
+```{r}
+combat_result <- combat_harm(
+  df = combat_input,
+  features = feature_cols,
+  batch = "batch",
+  covariates = covariates,
+  type = "lm",
+  eb = TRUE,
+  quiet = TRUE
+)
+
+harmonized_df <- combat_result$harmonized_df
+
+gc(verbose = FALSE)
+```
+
+```{r}
+# Save files
+dir.create("data/harmonized_combined", 
+           showWarnings = FALSE, recursive = TRUE)
+dir.create("data/harmonized_u", 
+           showWarnings = FALSE, recursive = TRUE)
+dir.create("data/harmonized_c", 
+           showWarnings = FALSE, recursive = TRUE)
+
+harmonized_u <- harmonized_df[
+  harmonized_df$batch == "U",
+  !(names(harmonized_df) %in% "batch")
+]
+harmonized_c <- harmonized_df[
+  harmonized_df$batch == "C",
+  !(names(harmonized_df) %in% "batch")
+]
+
+write.csv(harmonized_df, 
+          "data/harmonized_combined/harmonized_all.csv", 
+          row.names = FALSE)
+
+write.csv(harmonized_u, 
+          "data/harmonized_u/u_harmonized.csv", 
+          row.names = FALSE)
+write.csv(harmonized_c, 
+          "data/harmonized_c/c_harmonized.csv", 
+          row.names = FALSE)
+
+rm(harmonized_u, harmonized_c)
+gc(verbose = FALSE)
+```
+
+# Post-Harmonization Diagnostics
+```{r}
+post_diagnostics <- visual_prep(
+  df = harmonized_df,
+  type = "lm",
+  features = feature_cols,
+  batch = "batch",
+  covariates = covariates
+)
+
+comfam_shiny(post_diagnostics)
+```
+
+# CovBat Harmonization
+```{r}
+cat("Running CovBat harmonization...\n")
+
+covbat_result <- combat_harm(
+  type = "lm",
+  features = feature_cols,
+  batch = "batch",
+  covariates = covariates,
+  df = combat_input,
+  family = "covfam",
+  eb = TRUE,
+  quiet = TRUE
+)
+
+covbat_harmonized_df <- covbat_result$harmonized_df
+
+gc(verbose = FALSE)
+cat("CovBat harmonization complete.\n")
+```
+
+# Save CovBat Results
+```{r}
+dir.create("data/covbat_harmonized_combined", 
+           showWarnings = FALSE, recursive = TRUE)
+dir.create("data/covbat_harmonized_u", 
+           showWarnings = FALSE, recursive = TRUE)
+dir.create("data/covbat_harmonized_c", 
+           showWarnings = FALSE, recursive = TRUE)
+
+covbat_harmonized_u <- covbat_harmonized_df[
+  covbat_harmonized_df$batch == "U",
+  !(names(covbat_harmonized_df) %in% "batch")
+]
+covbat_harmonized_c <- covbat_harmonized_df[
+  covbat_harmonized_df$batch == "C",
+  !(names(covbat_harmonized_df) %in% "batch")
+]
+
+write.csv(covbat_harmonized_df, 
+          "data/covbat_harmonized_combined/covbat_harmonized_all.csv", 
+          row.names = FALSE)
+write.csv(covbat_harmonized_u, 
+          "data/covbat_harmonized_u/u_covbat_harmonized.csv", 
+          row.names = FALSE)
+write.csv(covbat_harmonized_c, 
+          "data/covbat_harmonized_c/c_covbat_harmonized.csv", 
+          row.names = FALSE)
+
+rm(covbat_harmonized_u, covbat_harmonized_c)
+gc(verbose = FALSE)
+
+cat("CovBat results saved.\n")
+```
+
+# CovBat Post-Harmonization Diagnostics
+```{r}
+covbat_post_diagnostics <- visual_prep(
+  df = covbat_harmonized_df,
+  type = "lm",
+  features = feature_cols,
+  batch = "batch",
+  covariates = covariates
+)
+
+comfam_shiny(covbat_post_diagnostics)
+```

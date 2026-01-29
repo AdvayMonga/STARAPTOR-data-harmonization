@@ -1,0 +1,59 @@
+# Data files
+*.csv
+data/
+
+# Results and figures
+results/
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# R
+renv/
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Config (contains file paths)
+config.py
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+output.log
