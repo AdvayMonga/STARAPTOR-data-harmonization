@@ -1,5 +1,5 @@
 """
-Configuration TEMPLATE for STARAPTOR project
+Configuration TEMPLATE 
 Copy this file to config.py and update the paths for your local machine
 """
 
@@ -11,9 +11,7 @@ DATA_DIR = BASE_DIR / "data"
 RESULTS_DIR = BASE_DIR / "results"
 FIGURES_DIR = RESULTS_DIR / "figures"
 
-# ============================================================
 # RAW INPUT FILES - Update these paths for your local machine
-# ============================================================
 RAW_INPUT = {
     "u_raw": Path("/path/to/your/ucd_preprocessed_data.csv"),
     "c_raw": Path("/path/to/your/Reduced_Features_NO_COLOR.csv"),

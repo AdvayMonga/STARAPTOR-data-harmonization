@@ -62,7 +62,7 @@ print("="*60)
 for k in feature_counts:
     print(f"\n>>> Testing with {k} features...")
     
-    # ========== eGFR MODELS ==========
+    # eGFR MODELS
     top_k_egfr = selected_features_egfr[:k]
     X_train_egfr = X_train[top_k_egfr]
     X_test_egfr = X_test[top_k_egfr]
@@ -121,7 +121,7 @@ for k in feature_counts:
     
     print(f"  eGFR - Avg Test MSE: {avg_test_mse:.1f}")
     
-    # ========== DGF MODELS ==========
+    # DGF MODELS
     top_k_dgf = selected_features_dgf[:k]
     X_train_dgf = X_train[top_k_dgf]
     X_test_dgf = X_test[top_k_dgf]
@@ -205,7 +205,7 @@ print(f"\nDGF Optimal Features: {int(optimal_dgf['K'])}")
 print(f"  Best Avg Test AUC: {optimal_dgf['Avg Test AUC']:.3f}")
 print(f"  Overfitting Gap: {optimal_dgf['Overfitting Gap']:.3f}")
 
-# ========== VISUALIZATIONS ==========
+# VISUALIZATIONS
 print("\nGenerating visualizations...")
 
 fig, axes = plt.subplots(2, 2, figsize=(16, 12))
@@ -325,7 +325,7 @@ plt.savefig('results/figures/mrmr_optimal_model_comparison.png', dpi=300,
 plt.close()
 print("Saved: mrmr_optimal_model_comparison.png")
 
-# ========== COMPARE WITH BASELINE (ALL FEATURES) ==========
+# COMPARE WITH BASELINE (ALL FEATURES)
 print("\nGenerating comparison with baseline (all features)...")
 
 # Load baseline harmonized results
@@ -335,7 +335,7 @@ baseline_dgf = pd.read_csv('results/dgf_results_harmonized.csv', index_col=0)
 # Create comparison figure
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
-# --- eGFR Chart ---
+# eGFR Chart
 x_pos = np.arange(len(models))
 bar_width = 0.2
 
@@ -370,7 +370,7 @@ ax1.set_xticklabels(models)
 ax1.legend(fontsize=9)
 ax1.grid(axis='y', alpha=0.3)
 
-# --- DGF Chart ---
+# DGF Chart
 # Get baseline data (all 165 features)
 dgf_train_all = [baseline_dgf.loc[m, 'Train AUC'] for m in models]
 dgf_test_all = [baseline_dgf.loc[m, 'Test AUC'] for m in models]

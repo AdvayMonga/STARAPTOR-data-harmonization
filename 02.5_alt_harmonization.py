@@ -18,7 +18,7 @@ print("="*60)
 print("ALTERNATIVE HARMONIZATION METHODS")
 print("="*60)
 
-# ========== LOAD DATA ==========
+# LOAD DATA
 print("\nLoading data...")
 df_u = pd.read_csv('data/u_image_features.csv')
 df_c = pd.read_csv('data/c_image_features.csv')
@@ -39,7 +39,7 @@ feature_cols = [col for col in df_combined.columns if col not in metadata_cols]
 
 print(f"  Features: {len(feature_cols)}")
 
-# ========== Z-SCORE PER BATCH ==========
+# Z-SCORE PER BATCH
 print("\n" + "-"*60)
 print("1. Z-SCORE PER BATCH")
 print("-"*60)
@@ -81,7 +81,7 @@ df_zscore[df_zscore['batch'] == 'C'].to_csv(
 
 print("  ✓ Saved to data/zscore_harmonized_*/")
 
-# ========== QUANTILE NORMALIZATION ==========
+# QUANTILE NORMALIZATION
 print("\n" + "-"*60)
 print("2. QUANTILE NORMALIZATION")
 print("-"*60)
@@ -119,7 +119,7 @@ df_quantile[df_quantile['batch'] == 'C'].to_csv(
 
 print("  ✓ Saved to data/quantile_harmonized_*/")
 
-# ========== CORAL (Correlation Alignment) ==========
+# CORAL (Correlation Alignment)
 print("\n" + "-"*60)
 print("3. CORAL (Correlation Alignment)")
 print("-"*60)
@@ -194,7 +194,7 @@ df_coral[df_coral['batch'] == 'C'].to_csv(
 
 print("  ✓ Saved to data/coral_harmonized_*/")
 
-# ========== SUMMARY ==========
+# SUMMARY
 print("\n" + "="*60)
 print("SUMMARY")
 print("="*60)

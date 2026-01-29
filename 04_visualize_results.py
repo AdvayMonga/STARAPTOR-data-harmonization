@@ -21,8 +21,6 @@ plt.rcParams['font.size'] = 10
 # Create output directory
 Path("results/figures").mkdir(parents=True, exist_ok=True)
 
-# ========== DEFINE COMPARISON GROUPS ==========
-
 # SCENARIOS: Cross-cohort training strategies
 SCENARIOS = {
     'U → C': 'U_to_C',
@@ -42,7 +40,7 @@ METHODS = {
     'CORAL': 'coral',
 }
 
-# ========== LOAD ALL RESULTS ==========
+# LOAD ALL RESULTS
 print("="*60)
 print("LOADING RESULTS")
 print("="*60)
@@ -76,7 +74,7 @@ df_scenario_dgf = pd.concat(scenario_dgf.values()).reset_index().rename(columns=
 df_method_egfr = pd.concat(method_egfr.values()).reset_index().rename(columns={'index': 'Model'})
 df_method_dgf = pd.concat(method_dgf.values()).reset_index().rename(columns={'index': 'Model'})
 
-# ========== 1. SUMMARY TABLES ==========
+# SUMMARY TABLES
 print("\n" + "="*60)
 print("SUMMARY TABLES")
 print("="*60)
@@ -112,7 +110,7 @@ method_egfr_pivot.to_csv('results/egfr_method_summary.csv')
 method_dgf_pivot.to_csv('results/dgf_method_summary.csv')
 print("\n✓ Saved summary tables to results/")
 
-# ========== 2. SCENARIO HEATMAPS ==========
+# SCENARIO HEATMAPS
 print("\n" + "="*60)
 print("GENERATING SCENARIO HEATMAPS")
 print("="*60)
@@ -144,7 +142,7 @@ plt.savefig('results/figures/scenario_heatmap.png', bbox_inches='tight')
 plt.close()
 print("✓ Saved: scenario_heatmap.png")
 
-# ========== 3. METHOD HEATMAPS ==========
+# METHOD HEATMAPS
 print("\n" + "="*60)
 print("GENERATING METHOD HEATMAPS")
 print("="*60)
@@ -176,7 +174,7 @@ plt.savefig('results/figures/method_heatmap.png', bbox_inches='tight')
 plt.close()
 print("✓ Saved: method_heatmap.png")
 
-# ========== 4. AVERAGE PERFORMANCE BY SCENARIO ==========
+# AVERAGE PERFORMANCE BY SCENARIO
 print("\n" + "="*60)
 print("GENERATING AVERAGE PERFORMANCE BY SCENARIO")
 print("="*60)
@@ -222,7 +220,7 @@ plt.savefig('results/figures/average_performance_by_scenario.png', bbox_inches='
 plt.close()
 print("✓ Saved: average_performance_by_scenario.png")
 
-# ========== 5. AVERAGE PERFORMANCE BY METHOD ==========
+# AVERAGE PERFORMANCE BY METHOD
 print("\n" + "="*60)
 print("GENERATING AVERAGE PERFORMANCE BY METHOD")
 print("="*60)
@@ -276,7 +274,7 @@ plt.savefig('results/figures/average_performance_by_method.png', bbox_inches='ti
 plt.close()
 print("✓ Saved: average_performance_by_method.png")
 
-# ========== 6. IMPROVEMENT OVER UNHARMONIZED (METHODS) ==========
+# IMPROVEMENT OVER UNHARMONIZED (METHODS)
 print("\n" + "="*60)
 print("GENERATING IMPROVEMENT OVER UNHARMONIZED")
 print("="*60)
@@ -327,7 +325,7 @@ if 'Unharmonized' in method_egfr_avg.index and 'Unharmonized' in method_dgf_avg.
 else:
     print("⚠ Skipping improvement chart - Unharmonized baseline not available")
 
-# ========== 7. COMBINED RESULTS TABLES ==========
+# COMBINED RESULTS TABLES
 print("\n" + "="*60)
 print("GENERATING COMBINED RESULTS TABLES")
 print("="*60)
@@ -374,7 +372,7 @@ df_method_combined = pd.DataFrame(method_results)
 df_method_combined.to_csv('results/all_method_results.csv', index=False)
 print("✓ Saved: all_method_results.csv")
 
-# ========== SUMMARY ==========
+# SUMMARY
 print("\n" + "="*60)
 print("SUMMARY")
 print("="*60)
