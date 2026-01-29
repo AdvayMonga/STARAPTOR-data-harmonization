@@ -1,13 +1,17 @@
 import pandas as pd
 import numpy as np
+from config import RAW_INPUT, RAW_DATA, DATA_DIR
+
+# Ensure data directory exists
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Load data
 print("\n" + "="*60)
 print("LOADING RAW DATA")
 print("\n" + "="*60)
 
-df_u = pd.read_csv('/Users/advaymonga/Downloads/ucd_preprocessed_data.csv')
-df_c = pd.read_csv('/Users/advaymonga/Downloads/Reduced_Features_NO_COLOR (1).csv')
+df_u = pd.read_csv(RAW_INPUT["u_raw"])
+df_c = pd.read_csv(RAW_INPUT["c_raw"])
 
 print("Data Loaded Successfully")
 print(f"U Dataset Shape: {df_u.shape}")
@@ -57,8 +61,8 @@ print("\n" + "="*60)
 print("SAVING PROCESSED DATA")
 print("="*60)
 
-df_u.to_csv('data/u_subject_level.csv', index=False)
-df_c_subject.to_csv('data/c_subject_level.csv', index=False)
+df_u.to_csv(RAW_DATA["u_subject_level"], index=False)
+df_c_subject.to_csv(RAW_DATA["c_subject_level"], index=False)
 
-print("Saved: data/u_subject_level.csv")
-print("Saved: data/c_subject_level.csv")
+print(f"Saved: {RAW_DATA['u_subject_level']}")
+print(f"Saved: {RAW_DATA['c_subject_level']}")
