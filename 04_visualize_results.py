@@ -408,4 +408,113 @@ print("  - dgf_method_summary.csv")
 print("  - all_scenario_results.csv")
 print("  - all_method_results.csv")
 
+# ========== 8. FEATURE IMPORTANCE (Best Models) ==========
+print("\n" + "="*60)
+print("GENERATING FEATURE IMPORTANCE PLOTS")
+print("="*60)
+
+try:
+    from xgboost import XGBRegressor, XGBClassifier
+    from sklearn.preprocessing import StandardScaler
+    
+    # Load ComBat harmonized training data (best performing)
+    train_data = pd.read_csv('data/harmonized_combined/harmonized_train.csv')
+    print(f"Loaded training data: {train_data.shape}")
+    
+    # Prepare features (exclude ID and outcomes)
+    exclude_cols = ['Subject_ID', 'eGFR_12M', 'DGF', 'Site']
+    feature_cols = [c for c in train_data.columns if c not in exclude_cols]
+    
+    X = train_data[feature_cols].copy()
+    y_egfr = train_data['eGFR_12M']
+    y_dgf = train_data['DGF']
+    
+    # Handle missing values
+    X = X.fillna(X.median())
+    
+    # Scale features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    # Train XGBoost for eGFR (regression)
+    print("Training XGBoost for eGFR...")
+    xgb_egfr = XGBRegressor(
+        n_estimators=100,
+        max_depth=3,
+        learning_rate=0.1,
+        random_state=42,
+        n_jobs=-1
+    )
+    xgb_egfr.fit(X_scaled, y_egfr)
+    
+    # Train XGBoost for DGF (classification)
+    print("Training XGBoost for DGF...")
+    xgb_dgf = XGBClassifier(
+        n_estimators=100,
+        max_depth=3,
+        learning_rate=0.1,
+        random_state=42,
+        n_jobs=-1,
+        use_label_encoder=False,
+        eval_metric='logloss'
+    )
+    xgb_dgf.fit(X_scaled, y_dgf)
+    
+    # Get feature importances
+    egfr_importance = pd.DataFrame({
+        'Feature': feature_cols,
+        'Importance': xgb_egfr.feature_importances_
+    }).sort_values('Importance', ascending=False)
+    
+    dgf_importance = pd.DataFrame({
+        'Feature': feature_cols,
+        'Importance': xgb_dgf.feature_importances_
+    }).sort_values('Importance', ascending=False)
+    
+    # Plot top 20 features for each
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+    
+    # eGFR Feature Importance
+    ax = axes[0]
+    top_egfr = egfr_importance.head(20)
+    bars = ax.barh(range(len(top_egfr)), top_egfr['Importance'].values, color='#3498db', edgecolor='black', linewidth=0.5)
+    ax.set_yticks(range(len(top_egfr)))
+    ax.set_yticklabels(top_egfr['Feature'].values, fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlabel('Feature Importance', fontsize=12, fontweight='bold')
+    ax.set_title('eGFR Prediction: Top 20 Features\n(XGBoost on ComBat Harmonized Data)', fontsize=14, fontweight='bold')
+    
+    # DGF Feature Importance
+    ax = axes[1]
+    top_dgf = dgf_importance.head(20)
+    bars = ax.barh(range(len(top_dgf)), top_dgf['Importance'].values, color='#e74c3c', edgecolor='black', linewidth=0.5)
+    ax.set_yticks(range(len(top_dgf)))
+    ax.set_yticklabels(top_dgf['Feature'].values, fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlabel('Feature Importance', fontsize=12, fontweight='bold')
+    ax.set_title('DGF Prediction: Top 20 Features\n(XGBoost on ComBat Harmonized Data)', fontsize=14, fontweight='bold')
+    
+    plt.tight_layout()
+    plt.savefig('results/figures/feature_importance.png', bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: feature_importance.png")
+    
+    # Save feature importance tables
+    egfr_importance.to_csv('results/egfr_feature_importance.csv', index=False)
+    dgf_importance.to_csv('results/dgf_feature_importance.csv', index=False)
+    print("✓ Saved: egfr_feature_importance.csv")
+    print("✓ Saved: dgf_feature_importance.csv")
+    
+    # Print top 10 features
+    print("\nTop 10 Features for eGFR:")
+    for i, row in egfr_importance.head(10).iterrows():
+        print(f"  {row['Feature']}: {row['Importance']:.4f}")
+    
+    print("\nTop 10 Features for DGF:")
+    for i, row in dgf_importance.head(10).iterrows():
+        print(f"  {row['Feature']}: {row['Importance']:.4f}")
+
+except Exception as e:
+    print(f"⚠ Could not generate feature importance plots: {e}")
+
 print("\n" + "="*60)
