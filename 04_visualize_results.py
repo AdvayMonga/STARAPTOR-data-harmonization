@@ -59,12 +59,10 @@ def load_results(comparison_dict, outcome):
     return results
 
 # Load SCENARIOS results
-print("\n--- Loading Scenario Results ---")
 scenario_egfr = load_results(SCENARIOS, 'egfr')
 scenario_dgf = load_results(SCENARIOS, 'dgf')
 
 # Load METHODS results  
-print("\n--- Loading Method Results ---")
 method_egfr = load_results(METHODS, 'egfr')
 method_dgf = load_results(METHODS, 'dgf')
 
@@ -322,6 +320,76 @@ if 'Unharmonized' in method_egfr_avg.index and 'Unharmonized' in method_dgf_avg.
     plt.savefig('results/figures/improvement_over_unharmonized.png', bbox_inches='tight')
     plt.close()
     print("✓ Saved: improvement_over_unharmonized.png")
+    
+    # IMPROVEMENT BY MODEL (Grouped Bar Chart)
+    print("\n" + "="*60)
+    print("GENERATING IMPROVEMENT BY MODEL")
+    print("="*60)
+    
+    # Calculate per-model improvement for eGFR
+    egfr_model_improve = pd.DataFrame()
+    for method in [m for m in METHODS.keys() if m != 'Unharmonized']:
+        method_mse = method_egfr_pivot[method]
+        unharm_mse = method_egfr_pivot['Unharmonized']
+        improve = ((unharm_mse - method_mse) / unharm_mse) * 100
+        egfr_model_improve[method] = improve
+    
+    # Calculate per-model improvement for DGF
+    dgf_model_improve = pd.DataFrame()
+    for method in [m for m in METHODS.keys() if m != 'Unharmonized']:
+        method_auc = method_dgf_pivot[method]
+        unharm_auc = method_dgf_pivot['Unharmonized']
+        improve = ((method_auc - unharm_auc) / unharm_auc) * 100
+        dgf_model_improve[method] = improve
+    
+    # Plot grouped bar charts
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10))
+    
+    # eGFR Improvement by Model
+    ax = axes[0]
+    x = np.arange(len(egfr_model_improve.index))
+    width = 0.15
+    methods = egfr_model_improve.columns.tolist()
+    colors = ['#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#e74c3c']
+    
+    for i, method in enumerate(methods):
+        vals = egfr_model_improve[method].values
+        bars = ax.bar(x + i*width, vals, width, label=method, color=colors[i % len(colors)], edgecolor='black', linewidth=0.5)
+    
+    ax.axhline(y=0, color='black', linewidth=1)
+    ax.set_xlabel('Model', fontsize=12, fontweight='bold')
+    ax.set_ylabel('% Improvement in Test MSE', fontsize=12, fontweight='bold')
+    ax.set_title('eGFR: % Improvement Over Unharmonized by Model\n(Positive = Better)', fontsize=14, fontweight='bold')
+    ax.set_xticks(x + width * (len(methods)-1) / 2)
+    ax.set_xticklabels(egfr_model_improve.index, fontsize=10)
+    ax.legend(title='Harmonization Method', fontsize=9, loc='upper right')
+    ax.grid(axis='y', alpha=0.3)
+    
+    # DGF Improvement by Model
+    ax = axes[1]
+    for i, method in enumerate(methods):
+        vals = dgf_model_improve[method].values
+        bars = ax.bar(x + i*width, vals, width, label=method, color=colors[i % len(colors)], edgecolor='black', linewidth=0.5)
+    
+    ax.axhline(y=0, color='black', linewidth=1)
+    ax.set_xlabel('Model', fontsize=12, fontweight='bold')
+    ax.set_ylabel('% Improvement in Test AUC', fontsize=12, fontweight='bold')
+    ax.set_title('DGF: % Improvement Over Unharmonized by Model\n(Positive = Better)', fontsize=14, fontweight='bold')
+    ax.set_xticks(x + width * (len(methods)-1) / 2)
+    ax.set_xticklabels(dgf_model_improve.index, fontsize=10)
+    ax.legend(title='Harmonization Method', fontsize=9, loc='upper right')
+    ax.grid(axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('results/figures/improvement_by_model.png', bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: improvement_by_model.png")
+    
+    # Print per-model improvements
+    print("\neGFR % Improvement by Model:")
+    print(egfr_model_improve.round(1).to_string())
+    print("\nDGF % Improvement by Model:")
+    print(dgf_model_improve.round(1).to_string())
 else:
     print("⚠ Skipping improvement chart - Unharmonized baseline not available")
 
@@ -408,7 +476,7 @@ print("  - dgf_method_summary.csv")
 print("  - all_scenario_results.csv")
 print("  - all_method_results.csv")
 
-# ========== 8. FEATURE IMPORTANCE (Best Models) ==========
+# FEATURE IMPORTANCE (Best Models)
 print("\n" + "="*60)
 print("GENERATING FEATURE IMPORTANCE PLOTS")
 print("="*60)
@@ -416,25 +484,33 @@ print("="*60)
 try:
     from xgboost import XGBRegressor, XGBClassifier
     from sklearn.preprocessing import StandardScaler
+    from sklearn.inspection import permutation_importance
     
-    # Load ComBat harmonized training data (best performing)
+    # Load ComBat harmonized training and test data (best performing)
     train_data = pd.read_csv('data/harmonized_combined/harmonized_train.csv')
+    test_data = pd.read_csv('data/harmonized_combined/harmonized_test.csv')
     print(f"Loaded training data: {train_data.shape}")
+    print(f"Loaded test data: {test_data.shape}")
     
     # Prepare features (exclude ID and outcomes)
     exclude_cols = ['Subject_ID', 'eGFR_12M', 'DGF', 'Site']
     feature_cols = [c for c in train_data.columns if c not in exclude_cols]
     
-    X = train_data[feature_cols].copy()
-    y_egfr = train_data['eGFR_12M']
-    y_dgf = train_data['DGF']
+    X_train = train_data[feature_cols].copy()
+    X_test = test_data[feature_cols].copy()
+    y_train_egfr = train_data['eGFR_12M']
+    y_test_egfr = test_data['eGFR_12M']
+    y_train_dgf = train_data['DGF']
+    y_test_dgf = test_data['DGF']
     
     # Handle missing values
-    X = X.fillna(X.median())
+    X_train = X_train.fillna(X_train.median())
+    X_test = X_test.fillna(X_train.median())  # Use train median for test
     
     # Scale features
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
     
     # Train XGBoost for eGFR (regression)
     print("Training XGBoost for eGFR...")
@@ -445,7 +521,7 @@ try:
         random_state=42,
         n_jobs=-1
     )
-    xgb_egfr.fit(X_scaled, y_egfr)
+    xgb_egfr.fit(X_train_scaled, y_train_egfr)
     
     # Train XGBoost for DGF (classification)
     print("Training XGBoost for DGF...")
@@ -455,66 +531,181 @@ try:
         learning_rate=0.1,
         random_state=42,
         n_jobs=-1,
-        use_label_encoder=False,
         eval_metric='logloss'
     )
-    xgb_dgf.fit(X_scaled, y_dgf)
+    xgb_dgf.fit(X_train_scaled, y_train_dgf)
     
-    # Get feature importances
-    egfr_importance = pd.DataFrame({
-        'Feature': feature_cols,
-        'Importance': xgb_egfr.feature_importances_
-    }).sort_values('Importance', ascending=False)
+    # CKD STAGE DISTRIBUTION (eGFR)
+    print("\n" + "="*60)
+    print("GENERATING CKD STAGE DISTRIBUTION")
+    print("="*60)
     
-    dgf_importance = pd.DataFrame({
-        'Feature': feature_cols,
-        'Importance': xgb_dgf.feature_importances_
-    }).sort_values('Importance', ascending=False)
+    # Get predictions
+    y_train_pred = xgb_egfr.predict(X_train_scaled)
+    y_test_pred = xgb_egfr.predict(X_test_scaled)
+    
+    # Define CKD stages based on eGFR
+    def egfr_to_ckd_stage(egfr):
+        """Map eGFR to CKD stage"""
+        if egfr >= 90:
+            return 'G1 (≥90)'
+        elif egfr >= 60:
+            return 'G2 (60-89)'
+        elif egfr >= 45:
+            return 'G3a (45-59)'
+        elif egfr >= 30:
+            return 'G3b (30-44)'
+        elif egfr >= 15:
+            return 'G4 (15-29)'
+        else:
+            return 'G5 (<15)'
+    
+    ckd_order = ['G1 (≥90)', 'G2 (60-89)', 'G3a (45-59)', 'G3b (30-44)', 'G4 (15-29)', 'G5 (<15)']
+    
+    # Map to CKD stages
+    train_true_ckd = pd.Series([egfr_to_ckd_stage(e) for e in y_train_egfr])
+    train_pred_ckd = pd.Series([egfr_to_ckd_stage(e) for e in y_train_pred])
+    test_true_ckd = pd.Series([egfr_to_ckd_stage(e) for e in y_test_egfr])
+    test_pred_ckd = pd.Series([egfr_to_ckd_stage(e) for e in y_test_pred])
+    
+    # Create CKD distribution plot
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    
+    # Training set
+    ax = axes[0]
+    train_true_counts = train_true_ckd.value_counts().reindex(ckd_order, fill_value=0)
+    train_pred_counts = train_pred_ckd.value_counts().reindex(ckd_order, fill_value=0)
+    
+    x = np.arange(len(ckd_order))
+    width = 0.35
+    ax.bar(x - width/2, train_true_counts.values, width, label='Actual', color='#3498db', edgecolor='black')
+    ax.bar(x + width/2, train_pred_counts.values, width, label='Predicted', color='#e74c3c', edgecolor='black')
+    ax.set_xlabel('CKD Stage', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Count', fontsize=12, fontweight='bold')
+    ax.set_title('Training Set: CKD Stage Distribution\n(XGBoost on ComBat Harmonized Data)', fontsize=14, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(ckd_order, rotation=45, ha='right')
+    ax.legend()
+    ax.grid(axis='y', alpha=0.3)
+    
+    # Test set
+    ax = axes[1]
+    test_true_counts = test_true_ckd.value_counts().reindex(ckd_order, fill_value=0)
+    test_pred_counts = test_pred_ckd.value_counts().reindex(ckd_order, fill_value=0)
+    
+    ax.bar(x - width/2, test_true_counts.values, width, label='Actual', color='#3498db', edgecolor='black')
+    ax.bar(x + width/2, test_pred_counts.values, width, label='Predicted', color='#e74c3c', edgecolor='black')
+    ax.set_xlabel('CKD Stage', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Count', fontsize=12, fontweight='bold')
+    ax.set_title('Test Set: CKD Stage Distribution\n(XGBoost on ComBat Harmonized Data)', fontsize=14, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(ckd_order, rotation=45, ha='right')
+    ax.legend()
+    ax.grid(axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('results/figures/ckd_stage_distribution.png', bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: ckd_stage_distribution.png")
+    
+    # Print CKD stage comparison
+    print("\nCKD Stage Distribution (Training):")
+    for stage in ckd_order:
+        true_n = train_true_counts.get(stage, 0)
+        pred_n = train_pred_counts.get(stage, 0)
+        print(f"  {stage}: Actual={true_n}, Predicted={pred_n}")
+    
+    print("\nCKD Stage Distribution (Test):")
+    for stage in ckd_order:
+        true_n = test_true_counts.get(stage, 0)
+        pred_n = test_pred_counts.get(stage, 0)
+        print(f"  {stage}: Actual={true_n}, Predicted={pred_n}")
+    
+    # CONDITIONAL PERMUTATION IMPORTANCE
+    print("\n" + "="*60)
+    print("GENERATING PERMUTATION IMPORTANCE PLOTS")
+    print("="*60)
+    
+    # Compute permutation importance for eGFR (on test set)
+    print("Computing permutation importance for eGFR...")
+    perm_egfr = permutation_importance(
+        xgb_egfr, X_test_scaled, y_test_egfr, 
+        n_repeats=10, random_state=42, n_jobs=-1,
+        scoring='neg_mean_squared_error'
+    )
+    
+    # Compute permutation importance for DGF (on test set)
+    print("Computing permutation importance for DGF...")
+    perm_dgf = permutation_importance(
+        xgb_dgf, X_test_scaled, y_test_dgf,
+        n_repeats=10, random_state=42, n_jobs=-1,
+        scoring='roc_auc'
+    )
+    
+    # Process importance: zero out negatives, L1 normalize
+    def process_importance(importance_means, feature_names):
+        """Zero out negatives and L1 normalize"""
+        # Zero out negative values
+        importance = np.maximum(importance_means, 0)
+        # L1 normalize
+        if importance.sum() > 0:
+            importance = importance / importance.sum()
+        # Create DataFrame
+        df = pd.DataFrame({
+            'Feature': feature_names,
+            'Importance': importance
+        }).sort_values('Importance', ascending=False)
+        return df
+    
+    egfr_perm_importance = process_importance(perm_egfr.importances_mean, feature_cols)
+    dgf_perm_importance = process_importance(perm_dgf.importances_mean, feature_cols)
     
     # Plot top 20 features for each
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
     
-    # eGFR Feature Importance
+    # eGFR Permutation Importance
     ax = axes[0]
-    top_egfr = egfr_importance.head(20)
+    top_egfr = egfr_perm_importance.head(20)
     bars = ax.barh(range(len(top_egfr)), top_egfr['Importance'].values, color='#3498db', edgecolor='black', linewidth=0.5)
     ax.set_yticks(range(len(top_egfr)))
     ax.set_yticklabels(top_egfr['Feature'].values, fontsize=9)
     ax.invert_yaxis()
-    ax.set_xlabel('Feature Importance', fontsize=12, fontweight='bold')
-    ax.set_title('eGFR Prediction: Top 20 Features\n(XGBoost on ComBat Harmonized Data)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Permutation Importance (L1 Normalized)', fontsize=12, fontweight='bold')
+    ax.set_title('eGFR: Top 20 Features\n(Permutation Importance, XGBoost)', fontsize=14, fontweight='bold')
     
-    # DGF Feature Importance
+    # DGF Permutation Importance
     ax = axes[1]
-    top_dgf = dgf_importance.head(20)
+    top_dgf = dgf_perm_importance.head(20)
     bars = ax.barh(range(len(top_dgf)), top_dgf['Importance'].values, color='#e74c3c', edgecolor='black', linewidth=0.5)
     ax.set_yticks(range(len(top_dgf)))
     ax.set_yticklabels(top_dgf['Feature'].values, fontsize=9)
     ax.invert_yaxis()
-    ax.set_xlabel('Feature Importance', fontsize=12, fontweight='bold')
-    ax.set_title('DGF Prediction: Top 20 Features\n(XGBoost on ComBat Harmonized Data)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Permutation Importance (L1 Normalized)', fontsize=12, fontweight='bold')
+    ax.set_title('DGF: Top 20 Features\n(Permutation Importance, XGBoost)', fontsize=14, fontweight='bold')
     
     plt.tight_layout()
-    plt.savefig('results/figures/feature_importance.png', bbox_inches='tight')
+    plt.savefig('results/figures/permutation_importance.png', bbox_inches='tight')
     plt.close()
-    print("✓ Saved: feature_importance.png")
+    print("✓ Saved: permutation_importance.png")
     
-    # Save feature importance tables
-    egfr_importance.to_csv('results/egfr_feature_importance.csv', index=False)
-    dgf_importance.to_csv('results/dgf_feature_importance.csv', index=False)
-    print("✓ Saved: egfr_feature_importance.csv")
-    print("✓ Saved: dgf_feature_importance.csv")
+    # Save permutation importance tables
+    egfr_perm_importance.to_csv('results/egfr_permutation_importance.csv', index=False)
+    dgf_perm_importance.to_csv('results/dgf_permutation_importance.csv', index=False)
+    print("✓ Saved: egfr_permutation_importance.csv")
+    print("✓ Saved: dgf_permutation_importance.csv")
     
     # Print top 10 features
-    print("\nTop 10 Features for eGFR:")
-    for i, row in egfr_importance.head(10).iterrows():
+    print("\nTop 10 Features for eGFR (Permutation Importance):")
+    for _, row in egfr_perm_importance.head(10).iterrows():
         print(f"  {row['Feature']}: {row['Importance']:.4f}")
     
-    print("\nTop 10 Features for DGF:")
-    for i, row in dgf_importance.head(10).iterrows():
+    print("\nTop 10 Features for DGF (Permutation Importance):")
+    for _, row in dgf_perm_importance.head(10).iterrows():
         print(f"  {row['Feature']}: {row['Importance']:.4f}")
 
 except Exception as e:
+    import traceback
     print(f"⚠ Could not generate feature importance plots: {e}")
+    traceback.print_exc()
 
 print("\n" + "="*60)
