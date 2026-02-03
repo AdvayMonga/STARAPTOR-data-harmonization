@@ -27,6 +27,9 @@ method_dgf_pivot <- read.csv('results/tables/dgf_method_summary.csv', row.names 
 egfr_importance <- read.csv('results/tables/egfr_permutation_importance.csv')
 dgf_importance <- read.csv('results/tables/dgf_permutation_importance.csv')
 
+# Load CKD stage distribution
+ckd_distribution <- read.csv('results/tables/ckd_stage_distribution.csv')
+
 cat("Loaded all pre-computed results from results/tables/\n")
 ```
 
@@ -306,6 +309,43 @@ p2 <- ggplot(dgf_improve_long, aes(x = Model, y = Improvement, fill = Method)) +
   theme(plot.title = element_text(face = "bold", size = 14))
 
 grid.arrange(p1, p2, nrow = 2)
+```
+
+---
+
+# CKD Stage Distribution
+
+```{r ckd_stage_distribution, fig.width=14, fig.height=6}
+ckd_long <- ckd_distribution %>%
+  pivot_longer(-CKD_Stage, names_to = "Category", values_to = "Count") %>%
+  mutate(
+    CKD_Stage = factor(CKD_Stage, levels = ckd_distribution$CKD_Stage),
+    Set = ifelse(grepl("Train", Category), "Training", "Test"),
+    Type = ifelse(grepl("Actual", Category), "Actual", "Predicted")
+  )
+
+train_data <- ckd_long %>% filter(Set == "Training")
+test_data <- ckd_long %>% filter(Set == "Test")
+
+p1 <- ggplot(train_data, aes(x = CKD_Stage, y = Count, fill = Type)) +
+  geom_col(position = position_dodge(width = 0.8), color = "black", linewidth = 0.3, width = 0.7) +
+  scale_fill_manual(values = c("Actual" = "#3498db", "Predicted" = "#e74c3c")) +
+  labs(title = "Training Set: CKD Stage Distribution",
+       subtitle = "(XGBoost on ComBat Harmonized Data)",
+       x = "CKD Stage", y = "Count", fill = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold", size = 14))
+
+p2 <- ggplot(test_data, aes(x = CKD_Stage, y = Count, fill = Type)) +
+  geom_col(position = position_dodge(width = 0.8), color = "black", linewidth = 0.3, width = 0.7) +
+  scale_fill_manual(values = c("Actual" = "#3498db", "Predicted" = "#e74c3c")) +
+  labs(title = "Test Set: CKD Stage Distribution",
+       subtitle = "(XGBoost on ComBat Harmonized Data)",
+       x = "CKD Stage", y = "Count", fill = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold", size = 14))
+
+grid.arrange(p1, p2, ncol = 2)
 ```
 
 ---
