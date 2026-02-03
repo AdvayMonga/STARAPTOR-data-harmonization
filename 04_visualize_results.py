@@ -50,7 +50,7 @@ def load_results(comparison_dict, outcome):
     results = {}
     for name, key in comparison_dict.items():
         try:
-            df = pd.read_csv(f'results/{outcome}_results_{key}.csv', index_col=0)
+            df = pd.read_csv(f'results/tables/{outcome}_results_{key}.csv', index_col=0)
             df['Group'] = name
             results[name] = df
             print(f"  ✓ Loaded {outcome.upper()} {name}")
@@ -102,11 +102,11 @@ print("\nDGF Test AUC by Method (Higher = Better):")
 print(method_dgf_pivot.round(3).to_string())
 
 # Save tables
-scenario_egfr_pivot.to_csv('results/egfr_scenario_summary.csv')
-scenario_dgf_pivot.to_csv('results/dgf_scenario_summary.csv')
-method_egfr_pivot.to_csv('results/egfr_method_summary.csv')
-method_dgf_pivot.to_csv('results/dgf_method_summary.csv')
-print("\n✓ Saved summary tables to results/")
+scenario_egfr_pivot.to_csv('results/tables/egfr_scenario_summary.csv')
+scenario_dgf_pivot.to_csv('results/tables/dgf_scenario_summary.csv')
+method_egfr_pivot.to_csv('results/tables/egfr_method_summary.csv')
+method_dgf_pivot.to_csv('results/tables/dgf_method_summary.csv')
+print("\n✓ Saved summary tables to results/tables/")
 
 # SCENARIO HEATMAPS
 print("\n" + "="*60)
@@ -416,7 +416,7 @@ for group in df_scenario_egfr['Group'].unique():
             })
 
 df_scenario_combined = pd.DataFrame(scenario_results)
-df_scenario_combined.to_csv('results/all_scenario_results.csv', index=False)
+df_scenario_combined.to_csv('results/tables/all_scenario_results.csv', index=False)
 print("✓ Saved: all_scenario_results.csv")
 
 # Create comprehensive method results table
@@ -437,7 +437,7 @@ for group in df_method_egfr['Group'].unique():
             })
 
 df_method_combined = pd.DataFrame(method_results)
-df_method_combined.to_csv('results/all_method_results.csv', index=False)
+df_method_combined.to_csv('results/tables/all_method_results.csv', index=False)
 print("✓ Saved: all_method_results.csv")
 
 # SUMMARY
@@ -468,7 +468,7 @@ print("  - average_performance_by_scenario.png")
 print("  - average_performance_by_method.png")
 print("  - improvement_over_unharmonized.png")
 
-print("\n--- Tables saved to results/ ---")
+print("\n--- Tables saved to results/tables/ ---")
 print("  - egfr_scenario_summary.csv")
 print("  - dgf_scenario_summary.csv")
 print("  - egfr_method_summary.csv")
@@ -689,8 +689,8 @@ try:
     print("✓ Saved: permutation_importance.png")
     
     # Save permutation importance tables
-    egfr_perm_importance.to_csv('results/egfr_permutation_importance.csv', index=False)
-    dgf_perm_importance.to_csv('results/dgf_permutation_importance.csv', index=False)
+    egfr_perm_importance.to_csv('results/tables/egfr_permutation_importance.csv', index=False)
+    dgf_perm_importance.to_csv('results/tables/dgf_permutation_importance.csv', index=False)
     print("✓ Saved: egfr_permutation_importance.csv")
     print("✓ Saved: dgf_permutation_importance.csv")
     
