@@ -73,22 +73,31 @@ print("\n" + "="*60)
 print("GENERATING SCENARIO HEATMAPS")
 print("="*60)
 
+from scipy.stats import rankdata
+
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# eGFR Heatmap
+# eGFR Heatmap (exclude Ridge and Lasso, rank-based coloring with viridis)
 ax = axes[0]
-sns.heatmap(scenario_egfr_pivot, annot=True, fmt='.0f', cmap='RdYlGn_r',
-            cbar_kws={'label': 'Test MSE'}, ax=ax, linewidths=0.5)
-ax.set_title('eGFR Test MSE by Model and Scenario\n(Lower = Better)',
+scenario_egfr_filtered = scenario_egfr_pivot.drop(['Ridge', 'Lasso'], errors='ignore')
+# Create rank-based data for coloring (lower MSE = lower rank = better)
+egfr_ranks = pd.DataFrame(
+    rankdata(scenario_egfr_filtered.values.flatten()).reshape(scenario_egfr_filtered.shape),
+    index=scenario_egfr_filtered.index,
+    columns=scenario_egfr_filtered.columns
+)
+sns.heatmap(egfr_ranks, annot=scenario_egfr_filtered, fmt='.0f', cmap='viridis_r',
+            cbar=False, ax=ax, linewidths=0.5)
+ax.set_title('eGFR Test MSE by Model and Scenario\n(Lower/Lighter = Better, colors by rank)',
              fontsize=12, fontweight='bold')
 ax.set_xlabel('Scenario', fontsize=11)
 ax.set_ylabel('Model', fontsize=11)
 ax.tick_params(axis='x', rotation=45)
 
-# DGF Heatmap
+# DGF Heatmap (viridis palette)
 ax = axes[1]
-sns.heatmap(scenario_dgf_pivot, annot=True, fmt='.3f', cmap='RdYlGn',
-            cbar_kws={'label': 'Test AUC'}, ax=ax, linewidths=0.5)
+sns.heatmap(scenario_dgf_pivot, annot=True, fmt='.3f', cmap='viridis',
+            cbar=False, ax=ax, linewidths=0.5)
 ax.set_title('DGF Test AUC by Model and Scenario\n(Higher = Better)',
              fontsize=12, fontweight='bold')
 ax.set_xlabel('Scenario', fontsize=11)
@@ -107,20 +116,27 @@ print("="*60)
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-# eGFR Heatmap
+# eGFR Heatmap (exclude Ridge and Lasso, rank-based coloring with viridis)
 ax = axes[0]
-sns.heatmap(method_egfr_pivot, annot=True, fmt='.0f', cmap='RdYlGn_r',
-            cbar_kws={'label': 'Test MSE'}, ax=ax, linewidths=0.5)
-ax.set_title('eGFR Test MSE by Model and Harmonization Method\n(Lower = Better)',
+method_egfr_filtered = method_egfr_pivot.drop(['Ridge', 'Lasso'], errors='ignore')
+# Create rank-based data for coloring (lower MSE = lower rank = better)
+egfr_ranks = pd.DataFrame(
+    rankdata(method_egfr_filtered.values.flatten()).reshape(method_egfr_filtered.shape),
+    index=method_egfr_filtered.index,
+    columns=method_egfr_filtered.columns
+)
+sns.heatmap(egfr_ranks, annot=method_egfr_filtered, fmt='.0f', cmap='viridis_r',
+            cbar=False, ax=ax, linewidths=0.5)
+ax.set_title('eGFR Test MSE by Model and Harmonization Method\n(Lower = Better, colors by rank)',
              fontsize=12, fontweight='bold')
 ax.set_xlabel('Harmonization Method', fontsize=11)
 ax.set_ylabel('Model', fontsize=11)
 ax.tick_params(axis='x', rotation=45)
 
-# DGF Heatmap
+# DGF Heatmap (viridis palette)
 ax = axes[1]
-sns.heatmap(method_dgf_pivot, annot=True, fmt='.3f', cmap='RdYlGn',
-            cbar_kws={'label': 'Test AUC'}, ax=ax, linewidths=0.5)
+sns.heatmap(method_dgf_pivot, annot=True, fmt='.3f', cmap='viridis',
+            cbar=False, ax=ax, linewidths=0.5)
 ax.set_title('DGF Test AUC by Model and Harmonization Method\n(Higher = Better)',
              fontsize=12, fontweight='bold')
 ax.set_xlabel('Harmonization Method', fontsize=11)
@@ -143,12 +159,13 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 colors_egfr = ['#2ecc71' if v == scenario_egfr_avg.min() else '#3498db' for v in scenario_egfr_avg]
 colors_dgf = ['#2ecc71' if v == scenario_dgf_avg.max() else '#3498db' for v in scenario_dgf_avg]
 
-# eGFR Average MSE
+# eGFR Average MSE (sqrt scale)
 ax = axes[0]
 bars = ax.bar(scenario_egfr_avg.index, scenario_egfr_avg.values, color=colors_egfr, edgecolor='black', linewidth=0.5)
 ax.set_xlabel('Scenario', fontsize=12, fontweight='bold')
-ax.set_ylabel('Average Test MSE', fontsize=12, fontweight='bold')
-ax.set_title('eGFR: Average Test MSE by Scenario\n(Lower = Better)', fontsize=14, fontweight='bold')
+ax.set_ylabel('Average Test MSE (sqrt scale)', fontsize=12, fontweight='bold')
+ax.set_title('eGFR: Average Test MSE by Scenario\n(Lower = Better, sqrt scale)', fontsize=14, fontweight='bold')
+ax.set_yscale('function', functions=(lambda x: np.sqrt(x), lambda x: x**2))
 ax.tick_params(axis='x', rotation=45)
 for bar, val in zip(bars, scenario_egfr_avg.values):
     ax.annotate(f'{val:.0f}', xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),

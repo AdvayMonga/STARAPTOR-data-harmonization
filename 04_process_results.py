@@ -20,13 +20,14 @@ SCENARIOS = {
 }
 
 # METHODS: All harmonization methods for pooled cohort comparison
+# Order: Unharmonized first (baseline), then other methods, ComBat/CovBat last (best performers)
 METHODS = {
     'Unharmonized': 'unharmonized',
-    'ComBat': 'harmonized',
-    'CovBat': 'covbat',
     'Z-Score': 'zscore',
     'RAVEL': 'ravel',
     'CORAL': 'coral',
+    'CovBat': 'covbat',
+    'ComBat': 'harmonized',
 }
 
 # LOAD ALL RESULTS
