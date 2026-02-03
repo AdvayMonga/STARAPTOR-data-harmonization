@@ -46,6 +46,7 @@ renv/
 .RData
 .Ruserdata
 *.Rproj
+.Rprofile
 
 # Config (contains file paths)
 config.py
@@ -53,6 +54,11 @@ config.py
 # OS files
 .DS_Store
 Thumbs.db
+
+# AI/Editor tools
+.claude/
+.cursor/
+.copilot/
 
 # Logs
 *.log

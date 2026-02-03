@@ -49,9 +49,9 @@ melt_data <- scenario_egfr_pivot %>%
 ggplot(melt_data, aes(x = Scenario, y = Model, fill = MSE_rank)) +
   geom_tile(color = "white", linewidth = 0.5) +
   geom_text(aes(label = round(Test_MSE, 0)), size = 4) +
-  scale_fill_distiller(palette = "viridis", direction = -1, guide = "none") +
+  scale_fill_viridis_c(option = "viridis", direction = -1, guide = "none") +
   labs(title = "eGFR Test MSE by Model and Scenario",
-       subtitle = "(Lower = Better, colors by rank)",
+       subtitle = "(Lower/Lighter = Better, colors by rank)",
        x = "Scenario", y = "Model") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(face = "bold", size = 14))
@@ -70,7 +70,7 @@ melt_data <- scenario_dgf_pivot %>%
 ggplot(melt_data, aes(x = Scenario, y = Model, fill = Test_AUC)) +
   geom_tile(color = "white", linewidth = 0.5) +
   geom_text(aes(label = sprintf("%.3f", Test_AUC)), size = 4) +
-  scale_fill_distiller(palette = "RdYlGn", direction = 1) +
+  scale_fill_viridis_c(option = "viridis", direction = 1, guide = "none") +
   labs(title = "DGF Test AUC by Model and Scenario",
        subtitle = "(Higher = Better)",
        x = "Scenario", y = "Model", fill = "Test AUC") +
@@ -93,7 +93,7 @@ melt_data <- method_egfr_pivot %>%
 ggplot(melt_data, aes(x = Method, y = Model, fill = MSE_rank)) +
   geom_tile(color = "white", linewidth = 0.5) +
   geom_text(aes(label = round(Test_MSE, 0)), size = 4) +
-  scale_fill_distiller(palette = "RdYlGn", direction = -1, guide = "none") +
+  scale_fill_viridis_c(option = "viridis", direction = -1, guide = "none") +
   labs(title = "eGFR Test MSE by Model and Harmonization Method",
        subtitle = "(Lower = Better, colors by rank)",
        x = "Harmonization Method", y = "Model") +
@@ -114,7 +114,7 @@ melt_data <- method_dgf_pivot %>%
 ggplot(melt_data, aes(x = Method, y = Model, fill = Test_AUC)) +
   geom_tile(color = "white", linewidth = 0.5) +
   geom_text(aes(label = sprintf("%.3f", Test_AUC)), size = 4) +
-  scale_fill_distiller(palette = "RdYlGn", direction = 1) +
+  scale_fill_viridis_c(option = "viridis", direction = 1) +
   labs(title = "DGF Test AUC by Model and Harmonization Method",
        subtitle = "(Higher = Better)",
        x = "Harmonization Method", y = "Model", fill = "Test AUC") +

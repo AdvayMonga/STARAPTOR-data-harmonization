@@ -77,16 +77,15 @@ from scipy.stats import rankdata
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# eGFR Heatmap (exclude Ridge and Lasso, rank-based coloring with viridis)
+# eGFR Heatmap 
 ax = axes[0]
-scenario_egfr_filtered = scenario_egfr_pivot.drop(['Ridge', 'Lasso'], errors='ignore')
 # Create rank-based data for coloring (lower MSE = lower rank = better)
 egfr_ranks = pd.DataFrame(
-    rankdata(scenario_egfr_filtered.values.flatten()).reshape(scenario_egfr_filtered.shape),
-    index=scenario_egfr_filtered.index,
-    columns=scenario_egfr_filtered.columns
+    rankdata(scenario_egfr_pivot.values.flatten()).reshape(scenario_egfr_pivot.shape),
+    index=scenario_egfr_pivot.index,
+    columns=scenario_egfr_pivot.columns
 )
-sns.heatmap(egfr_ranks, annot=scenario_egfr_filtered, fmt='.0f', cmap='viridis_r',
+sns.heatmap(egfr_ranks, annot=scenario_egfr_pivot, fmt='.0f', cmap='viridis_r',
             cbar=False, ax=ax, linewidths=0.5)
 ax.set_title('eGFR Test MSE by Model and Scenario\n(Lower/Lighter = Better, colors by rank)',
              fontsize=12, fontweight='bold')
@@ -98,7 +97,7 @@ ax.tick_params(axis='x', rotation=45)
 ax = axes[1]
 sns.heatmap(scenario_dgf_pivot, annot=True, fmt='.3f', cmap='viridis',
             cbar=False, ax=ax, linewidths=0.5)
-ax.set_title('DGF Test AUC by Model and Scenario\n(Higher = Better)',
+ax.set_title('DGF Test AUC by Model and Scenario\n(Higher/Lighter = Better)',
              fontsize=12, fontweight='bold')
 ax.set_xlabel('Scenario', fontsize=11)
 ax.set_ylabel('Model', fontsize=11)
@@ -116,18 +115,17 @@ print("="*60)
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-# eGFR Heatmap (exclude Ridge and Lasso, rank-based coloring with viridis)
+# eGFR Heatmap 
 ax = axes[0]
-method_egfr_filtered = method_egfr_pivot.drop(['Ridge', 'Lasso'], errors='ignore')
 # Create rank-based data for coloring (lower MSE = lower rank = better)
 egfr_ranks = pd.DataFrame(
-    rankdata(method_egfr_filtered.values.flatten()).reshape(method_egfr_filtered.shape),
-    index=method_egfr_filtered.index,
-    columns=method_egfr_filtered.columns
+    rankdata(method_egfr_pivot.values.flatten()).reshape(method_egfr_pivot.shape),
+    index=method_egfr_pivot.index,
+    columns=method_egfr_pivot.columns
 )
-sns.heatmap(egfr_ranks, annot=method_egfr_filtered, fmt='.0f', cmap='viridis_r',
+sns.heatmap(egfr_ranks, annot=method_egfr_pivot, fmt='.0f', cmap='viridis_r',
             cbar=False, ax=ax, linewidths=0.5)
-ax.set_title('eGFR Test MSE by Model and Harmonization Method\n(Lower = Better, colors by rank)',
+ax.set_title('eGFR Test MSE by Model and Harmonization Method\n(Lower/Lighter = Better, colors by rank)',
              fontsize=12, fontweight='bold')
 ax.set_xlabel('Harmonization Method', fontsize=11)
 ax.set_ylabel('Model', fontsize=11)
@@ -137,7 +135,7 @@ ax.tick_params(axis='x', rotation=45)
 ax = axes[1]
 sns.heatmap(method_dgf_pivot, annot=True, fmt='.3f', cmap='viridis',
             cbar=False, ax=ax, linewidths=0.5)
-ax.set_title('DGF Test AUC by Model and Harmonization Method\n(Higher = Better)',
+ax.set_title('DGF Test AUC by Model and Harmonization Method\n(Higher/Lighter = Better)',
              fontsize=12, fontweight='bold')
 ax.set_xlabel('Harmonization Method', fontsize=11)
 ax.set_ylabel('Model', fontsize=11)
