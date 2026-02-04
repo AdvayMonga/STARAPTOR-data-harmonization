@@ -20,7 +20,7 @@ print("="*60)
 df_harmonized = pd.read_csv('data/harmonized_combined/harmonized_all.csv')
 df_harmonized = df_harmonized.drop(columns=['batch'])
 
-# Split into train/test (same random state as before for consistency)
+# Split into train/test (same random state)
 df_train, df_test = train_test_split(
     df_harmonized, test_size=0.2, random_state=42
 )

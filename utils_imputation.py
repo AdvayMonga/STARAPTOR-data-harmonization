@@ -18,13 +18,13 @@ def impute_missing_data(file_path, method='drop'):
             # Convert to numeric if possible (non-numeric becomes NaN)
             df[col] = pd.to_numeric(df[col], errors='coerce')
     
-    # Check for missing values (now detects NaN, empty strings, etc.)
+    # Check for missing values 
     missing_counts = df.isnull().sum()
     cols_with_missing = missing_counts[missing_counts > 0]
     
     if len(cols_with_missing) == 0:
         print("No missing values found.")
-        # Save even if no changes (ensures proper format)
+        # Save even if no changes
         df.to_csv(file_path, index=False)
         return
     

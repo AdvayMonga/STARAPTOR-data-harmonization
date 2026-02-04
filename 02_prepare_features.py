@@ -75,7 +75,7 @@ print("\n" + "="*60)
 print("IMPUTING MISSING DATA")
 print("="*60)
 
-# Set imputation method here: 'drop', 'mean', or 'median'
+# Set imputation method: 'drop', 'mean', or 'median'
 IMPUTATION_METHOD = 'drop'
 
 # Apply imputation (function handles all conversion and checking)
@@ -93,30 +93,22 @@ print("\nENSURING FEATURE ALIGNMENT...")
 u_features = [col for col in df_u_final.columns if col not in ['Subject_ID', 'eGFR_12M', 'DGF']]
 c_features = [col for col in df_c_final.columns if col not in ['Subject_ID', 'eGFR_12M', 'DGF']]
 
-# Find common features (intersection)
+# Find common features
 common_features = sorted(list(set(u_features) & set(c_features)))
 
 print(f"U features: {len(u_features)}")
 print(f"C features: {len(c_features)}")
 print(f"Common features: {len(common_features)}")
 
-# Find features only in U or only in C
+# Find features only in one dataset
 u_only = set(u_features) - set(c_features)
 c_only = set(c_features) - set(u_features)
 
 if len(u_only) > 0:
     print(f"\nFeatures only in U dataset ({len(u_only)}): Will be dropped")
-    for feat in sorted(list(u_only))[:5]:
-        print(f"    - {feat}")
-    if len(u_only) > 5:
-        print(f"    ... and {len(u_only) - 5} more")
 
 if len(c_only) > 0:
     print(f"\nFeatures only in C dataset ({len(c_only)}): Will be dropped")
-    for feat in sorted(list(c_only))[:5]:
-        print(f"    - {feat}")
-    if len(c_only) > 5:
-        print(f"    ... and {len(c_only) - 5} more")
 
 # Keep only common features in both datasets
 df_u_aligned = df_u_final[['Subject_ID'] + common_features + ['eGFR_12M', 'DGF']].copy()
@@ -143,24 +135,35 @@ print(f"\neGFR_12M:")
 print(f"  U - Type: {df_u_aligned['eGFR_12M'].dtype}, Range: [{df_u_aligned['eGFR_12M'].min():.1f}, {df_u_aligned['eGFR_12M'].max():.1f}]")
 print(f"  C - Type: {df_c_aligned['eGFR_12M'].dtype}, Range: [{df_c_aligned['eGFR_12M'].min():.1f}, {df_c_aligned['eGFR_12M'].max():.1f}]")
 
-# Check DGF - CRITICAL CHECK
+# Check DGF
 print(f"\nDGF:")
 print(f"  U - Unique values: {sorted(df_u_aligned['DGF'].dropna().unique())}")
 print(f"  C - Unique values: {sorted(df_c_aligned['DGF'].dropna().unique())}")
 print(f"  U - Type: {df_u_aligned['DGF'].dtype}")
 print(f"  C - Type: {df_c_aligned['DGF'].dtype}")
 
-# Check if DGF has unexpected values
+# Check for unexpected values
 u_dgf_vals = set(df_u_aligned['DGF'].dropna().unique())
 c_dgf_vals = set(df_c_aligned['DGF'].dropna().unique())
 
 if not u_dgf_vals.issubset({0, 1, 0.0, 1.0}):
-    print(f"\n⚠️  WARNING: U dataset DGF has unexpected values: {u_dgf_vals}")
+    print(f"\nWARNING: U dataset DGF has unexpected values: {u_dgf_vals}")
     print("   Expected only 0 and 1 for binary outcome!")
     
 if not c_dgf_vals.issubset({0, 1, 0.0, 1.0}):
-    print(f"\n⚠️  WARNING: C dataset DGF has unexpected values: {c_dgf_vals}")
+    print(f"\nWARNING: C dataset DGF has unexpected values: {c_dgf_vals}")
     print("   Expected only 0 and 1 for binary outcome!")
+
+u_egfr_vals = set(df_u_aligned['eGFR_12M'].dropna().unique())
+c_egfr_vals = set(df_c_aligned['eGFR_12M'].dropna().unique())
+
+if any(u_egfr_vals < 0) | (u_egfr_vals > 200):
+    print(f"\nWARNING: U dataset eGFR_12M has values outside expected range: {u_egfr_vals}")
+    print("   Range is expected to be 0-200")
+
+if not c_egfr_vals.issubset():
+    print(f"\nWARNING: C dataset eGFR_12M has values outside expected range: {c_egfr_vals}")
+    print("   Range is expected to be 0-200")
 
 # Save aligned datasets
 df_u_aligned.to_csv('data/u_image_features.csv', index=False)
@@ -196,8 +199,8 @@ if IMPUTATION_METHOD == 'drop':
 print(f"\n{'='*60}")
 print("FINAL FEATURE MATRIX DIMENSIONS")
 print("="*60)
-print(f"\nU cohort: {df_u_aligned.shape[0]} subjects × {len(common_features)} features")
-print(f"C cohort: {df_c_aligned.shape[0]} subjects × {len(common_features)} features")
+print(f"\nU cohort: {df_u_aligned.shape[0]} subjects x {len(common_features)} features")
+print(f"C cohort: {df_c_aligned.shape[0]} subjects x {len(common_features)} features")
 print(f"\nTotal columns per dataset: {df_u_aligned.shape[1]}")
 print(f"  - Subject_ID: 1 column")
 print(f"  - Image features: {len(common_features)} columns")

@@ -64,7 +64,7 @@ os.makedirs('data/zscore_harmonized_c', exist_ok=True)
 # Save combined
 df_zscore.to_csv('data/zscore_harmonized_combined/zscore_harmonized_all.csv', index=False)
 
-# Split into train/test (same random state for consistency)
+# Split into train/test
 df_zscore_train, df_zscore_test = train_test_split(
     df_zscore, test_size=0.2, random_state=42
 )
@@ -102,7 +102,7 @@ os.makedirs('data/quantile_harmonized_c', exist_ok=True)
 # Save combined
 df_quantile.to_csv('data/quantile_harmonized_combined/quantile_harmonized_all.csv', index=False)
 
-# Split into train/test
+# Split train/test
 df_quantile_train, df_quantile_test = train_test_split(
     df_quantile, test_size=0.2, random_state=42
 )
@@ -125,16 +125,6 @@ print("3. CORAL (Correlation Alignment)")
 print("-"*60)
 
 def coral_transform(X_source, X_target):
-    """
-    CORAL: Align source domain covariance to target domain.
-    
-    Args:
-        X_source: Source domain features (n_source, n_features)
-        X_target: Target domain features (n_target, n_features)
-    
-    Returns:
-        X_source_aligned: Source features with aligned covariance
-    """
     # Compute covariance matrices with regularization
     n_features = X_source.shape[1]
     reg = 1e-6 * np.eye(n_features)
@@ -163,7 +153,7 @@ X_u_aligned = coral_transform(X_u, X_c)
 # Create CORAL dataframe
 df_coral = df_combined.copy()
 
-# Replace U features with aligned version, keep C as-is
+# Replace U features with aligned , keep C
 df_coral.loc[df_coral['batch'] == 'U', feature_cols] = X_u_aligned
 # C stays the same (it's the target distribution)
 

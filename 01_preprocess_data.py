@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 from config import RAW_INPUT, RAW_DATA, DATA_DIR
 
-# Ensure data directory exists
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Load data
@@ -34,7 +33,7 @@ demographic_cols = ['Donor_age', 'Donor_Sex_0_Male_1_Female', 'Donor_race', 'Don
                     'Donor_Diabetes_History', 'Expanded_criteria_donor', 'Allocated_Discarded']
 
 
-# Image features = all numeric columns except outcomes
+# Image features - all numeric columns except outcomes
 image_cols = [col for col in numeric_cols if col not in outcome_cols]
 
 print(f"{len(image_cols)} image feature columns")
@@ -49,7 +48,7 @@ df_c_subject = df_c.groupby('Recipient_code').agg(agg_dict).reset_index()
 # Remove rows with empty Recipient_code
 df_c_subject = df_c_subject[df_c_subject['Recipient_code'].notna() & (df_c_subject['Recipient_code'] != '')]
 
-# Remove empyty columns
+# Remove empty columns
 df_c_subject = df_c_subject.dropna(axis=1, how='all')
 
 print(f"\nBefore aggregation: {df_c.shape}")

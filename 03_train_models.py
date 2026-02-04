@@ -199,14 +199,14 @@ print("="*60)
 print("TRAIN MODELS: Combined UNHARMONIZED Data (U + C)")
 print("="*60)
 
-# Combined unharmonized data - simply concatenate U and C without harmonization
+# Combined unharmonized data
 df_u = pd.read_csv('data/u_image_features.csv')
 df_c = pd.read_csv('data/c_image_features.csv')
 
 # Combine without harmonization
 df_unharmonized = pd.concat([df_u, df_c], ignore_index=True)
 
-# Use same random state for fair comparison
+# train/test with same random state
 df_train_unharm, df_test_unharm = train_test_split(
     df_unharmonized, test_size=0.2, random_state=42
 )
