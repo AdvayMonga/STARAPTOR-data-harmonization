@@ -70,6 +70,28 @@ df_c_matched.to_csv('data/c_image_features.csv', index=False)
 print(f"\nSaved: data/u_image_features.csv ({df_u_matched.shape})")
 print(f"Saved: data/c_image_features.csv ({df_c_matched.shape})")
 
+# Mayo (M) dataset: columns already use U naming convention, just select matched features
+print("\nProcessing Mayo (M) dataset...")
+df_m = pd.read_csv('data/m_subject_level.csv')
+print(f"M dataset: {df_m.shape}")
+
+# M dataset: columns already use U naming convention, just select matched features + outcomes
+m_available = [col for col in matched_u_cols if col in df_m.columns]
+m_missing = [col for col in matched_u_cols if col not in df_m.columns]
+
+if m_missing:
+    print(f"WARNING: {len(m_missing)} matched features missing in M: {m_missing}")
+
+m_output_cols = ['Subject_ID'] + m_available
+if 'eGFR_12M' in df_m.columns:
+    m_output_cols.append('eGFR_12M')
+if 'DGF' in df_m.columns:
+    m_output_cols.append('DGF')
+
+df_m_matched = df_m[m_output_cols].copy()
+df_m_matched.to_csv('data/m_image_features.csv', index=False)
+print(f"Saved: data/m_image_features.csv ({df_m_matched.shape})")
+
 # IMPUTE MISSING DATA
 print("\n" + "="*60)
 print("IMPUTING MISSING DATA")
@@ -81,28 +103,34 @@ IMPUTATION_METHOD = 'drop'
 # Apply imputation (function handles all conversion and checking)
 impute_missing_data('data/u_image_features.csv', method=IMPUTATION_METHOD)
 impute_missing_data('data/c_image_features.csv', method=IMPUTATION_METHOD)
+impute_missing_data('data/m_image_features.csv', method=IMPUTATION_METHOD)
 
 # Reload imputed files
 df_u_final = pd.read_csv('data/u_image_features.csv')
 df_c_final = pd.read_csv('data/c_image_features.csv')
+df_m_final = pd.read_csv('data/m_image_features.csv')
 
-# ENSURE BOTH DATASETS HAVE SAME FEATURES
+# ENSURE ALL DATASETS HAVE SAME FEATURES
 print("\nENSURING FEATURE ALIGNMENT...")
 
 # Get feature columns (exclude Subject_ID, eGFR_12M, DGF)
-u_features = [col for col in df_u_final.columns if col not in ['Subject_ID', 'eGFR_12M', 'DGF']]
-c_features = [col for col in df_c_final.columns if col not in ['Subject_ID', 'eGFR_12M', 'DGF']]
+meta_cols = ['Subject_ID', 'eGFR_12M', 'DGF']
+u_features = [col for col in df_u_final.columns if col not in meta_cols]
+c_features = [col for col in df_c_final.columns if col not in meta_cols]
+m_features = [col for col in df_m_final.columns if col not in meta_cols]
 
-# Find common features
-common_features = sorted(list(set(u_features) & set(c_features)))
+# Find common features across all three datasets
+common_features = sorted(list(set(u_features) & set(c_features) & set(m_features)))
 
 print(f"U features: {len(u_features)}")
 print(f"C features: {len(c_features)}")
-print(f"Common features: {len(common_features)}")
+print(f"M features: {len(m_features)}")
+print(f"Common features (all 3): {len(common_features)}")
 
 # Find features only in one dataset
-u_only = set(u_features) - set(c_features)
-c_only = set(c_features) - set(u_features)
+u_only = set(u_features) - set(common_features)
+c_only = set(c_features) - set(common_features)
+m_only = set(m_features) - set(common_features)
 
 if len(u_only) > 0:
     print(f"\nFeatures only in U dataset ({len(u_only)}): Will be dropped")
@@ -110,9 +138,13 @@ if len(u_only) > 0:
 if len(c_only) > 0:
     print(f"\nFeatures only in C dataset ({len(c_only)}): Will be dropped")
 
-# Keep only common features in both datasets
+if len(m_only) > 0:
+    print(f"\nFeatures only in M dataset ({len(m_only)}): Will be dropped")
+
+# Keep only common features in all datasets
 df_u_aligned = df_u_final[['Subject_ID'] + common_features + ['eGFR_12M', 'DGF']].copy()
 df_c_aligned = df_c_final[['Subject_ID'] + common_features + ['eGFR_12M', 'DGF']].copy()
+df_m_aligned = df_m_final[['Subject_ID'] + common_features + ['eGFR_12M', 'DGF']].copy()
 
 # REMOVE ROWS WITH MISSING SUBJECT_ID OR OUTCOMES
 print("\nREMOVING INCOMPLETE ROWS...")
@@ -126,6 +158,11 @@ c_before = len(df_c_aligned)
 df_c_aligned = df_c_aligned.dropna(subset=['Subject_ID', 'eGFR_12M', 'DGF'])
 c_removed = c_before - len(df_c_aligned)
 print(f"  C: removed {c_removed} rows with missing Subject_ID/outcomes")
+
+m_before = len(df_m_aligned)
+df_m_aligned = df_m_aligned.dropna(subset=['Subject_ID', 'eGFR_12M', 'DGF'])
+m_removed = m_before - len(df_m_aligned)
+print(f"  M: removed {m_removed} rows with missing Subject_ID/outcomes")
 
 # VALIDATE OUTCOME COLUMNS BEFORE SAVING
 print("\nVALIDATING OUTCOME COLUMNS...")
@@ -154,24 +191,26 @@ if not c_dgf_vals.issubset({0, 1, 0.0, 1.0}):
     print(f"\nWARNING: C dataset DGF has unexpected values: {c_dgf_vals}")
     print("   Expected only 0 and 1 for binary outcome!")
 
-u_egfr_vals = set(df_u_aligned['eGFR_12M'].dropna().unique())
-c_egfr_vals = set(df_c_aligned['eGFR_12M'].dropna().unique())
+u_egfr_min = df_u_aligned['eGFR_12M'].min()
+u_egfr_max = df_u_aligned['eGFR_12M'].max()
+c_egfr_min = df_c_aligned['eGFR_12M'].min()
+c_egfr_max = df_c_aligned['eGFR_12M'].max()
 
-if any(u_egfr_vals < 0) | (u_egfr_vals > 200):
-    print(f"\nWARNING: U dataset eGFR_12M has values outside expected range: {u_egfr_vals}")
-    print("   Range is expected to be 0-200")
+if u_egfr_min < 0 or u_egfr_max > 200:
+    print(f"\nWARNING: U dataset eGFR_12M has values outside expected range [0, 200]: [{u_egfr_min:.1f}, {u_egfr_max:.1f}]")
 
-if not c_egfr_vals.issubset():
-    print(f"\nWARNING: C dataset eGFR_12M has values outside expected range: {c_egfr_vals}")
-    print("   Range is expected to be 0-200")
+if c_egfr_min < 0 or c_egfr_max > 200:
+    print(f"\nWARNING: C dataset eGFR_12M has values outside expected range [0, 200]: [{c_egfr_min:.1f}, {c_egfr_max:.1f}]")
 
 # Save aligned datasets
 df_u_aligned.to_csv('data/u_image_features.csv', index=False)
 df_c_aligned.to_csv('data/c_image_features.csv', index=False)
+df_m_aligned.to_csv('data/m_image_features.csv', index=False)
 
 print(f"\n✓ Datasets aligned with {len(common_features)} common features")
 print(f"  Saved: data/u_image_features.csv ({df_u_aligned.shape})")
 print(f"  Saved: data/c_image_features.csv ({df_c_aligned.shape})")
+print(f"  Saved: data/m_image_features.csv ({df_m_aligned.shape})")
 
 # SUMMARY
 print("\n" + "="*60)
@@ -183,31 +222,35 @@ print(f"\nImputation method: {IMPUTATION_METHOD}")
 if IMPUTATION_METHOD == 'drop':
     features_dropped_total_u = (df_u_matched.shape[1]-3) - len(common_features)
     features_dropped_total_c = (df_c_matched.shape[1]-3) - len(common_features)
-    
+    features_dropped_total_m = (df_m_matched.shape[1]-1) - len(common_features)
+
     print(f"\nU dataset:")
     print(f"  Initial features: {df_u_matched.shape[1]-3}")
     print(f"  After imputation: {len(u_features)}")
     print(f"  After alignment: {len(common_features)}")
     print(f"  Total dropped: {features_dropped_total_u} features")
-    
+
     print(f"\nC dataset:")
     print(f"  Initial features: {df_c_matched.shape[1]-3}")
     print(f"  After imputation: {len(c_features)}")
     print(f"  After alignment: {len(common_features)}")
     print(f"  Total dropped: {features_dropped_total_c} features")
 
+    print(f"\nM dataset:")
+    print(f"  Initial features: {df_m_matched.shape[1]-1}")
+    print(f"  After imputation: {len(m_features)}")
+    print(f"  After alignment: {len(common_features)}")
+    print(f"  Total dropped: {features_dropped_total_m} features")
+
 print(f"\n{'='*60}")
 print("FINAL FEATURE MATRIX DIMENSIONS")
 print("="*60)
 print(f"\nU cohort: {df_u_aligned.shape[0]} subjects x {len(common_features)} features")
 print(f"C cohort: {df_c_aligned.shape[0]} subjects x {len(common_features)} features")
-print(f"\nTotal columns per dataset: {df_u_aligned.shape[1]}")
-print(f"  - Subject_ID: 1 column")
-print(f"  - Image features: {len(common_features)} columns")
-print(f"  - eGFR_12M: 1 column")
-print(f"  - DGF: 1 column")
+print(f"M cohort: {df_m_aligned.shape[0]} subjects x {len(common_features)} features")
+print(f"\nColumns per dataset: {df_u_aligned.shape[1]} (Subject_ID + {len(common_features)} features + eGFR_12M + DGF)")
 
-print(f"\n✓ Both datasets have IDENTICAL feature sets")
+print(f"\n✓ All datasets have IDENTICAL feature sets")
 print(f"✓ Ready for harmonization and modeling")
 print("="*60)
 
