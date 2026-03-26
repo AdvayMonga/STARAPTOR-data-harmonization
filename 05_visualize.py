@@ -401,6 +401,137 @@ if has_importance_data:
 else:
     print("⚠ Skipping permutation importance - data not available")
 
+# LOO COMBAT VISUALIZATIONS
+print("\n" + "="*60)
+print("GENERATING LOO COMBAT VISUALIZATIONS")
+print("="*60)
+
+LOO_KEYS  = ['LOO: UC → M', 'LOO: UM → C', 'LOO: CM → U']
+LOO_LABELS = {
+    'LOO: UC → M': 'UC Davis + Coimbra\n→ Mayo',
+    'LOO: UM → C': 'UC Davis + Mayo\n→ Coimbra',
+    'LOO: CM → U': 'Coimbra + Mayo\n→ UC Davis',
+}
+
+loo_egfr_available = [k for k in LOO_KEYS if k in scenario_egfr_pivot.columns]
+loo_dgf_available  = [k for k in LOO_KEYS if k in scenario_dgf_pivot.columns]
+
+if loo_egfr_available and loo_dgf_available:
+
+    # ── LOO Heatmap: performance per model per fold ───────────────
+    loo_egfr_pivot = scenario_egfr_pivot[loo_egfr_available].copy()
+    loo_dgf_pivot  = scenario_dgf_pivot[loo_dgf_available].copy()
+    loo_egfr_pivot.columns = [LOO_LABELS[k] for k in loo_egfr_available]
+    loo_dgf_pivot.columns  = [LOO_LABELS[k] for k in loo_dgf_available]
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 6))
+
+    ax = axes[0]
+    loo_egfr_ranks = pd.DataFrame(
+        rankdata(loo_egfr_pivot.values.flatten()).reshape(loo_egfr_pivot.shape),
+        index=loo_egfr_pivot.index, columns=loo_egfr_pivot.columns
+    )
+    sns.heatmap(loo_egfr_ranks, annot=loo_egfr_pivot, fmt='.0f', cmap='viridis_r',
+                cbar=False, ax=ax, linewidths=0.5)
+    ax.set_title('LOO ComBat — eGFR Test MSE\n(Lower/Lighter = Better, colors by rank)',
+                 fontsize=12, fontweight='bold')
+    ax.set_xlabel('Test Cohort (held out)', fontsize=11)
+    ax.set_ylabel('Model', fontsize=11)
+    ax.tick_params(axis='x', rotation=20)
+
+    ax = axes[1]
+    sns.heatmap(loo_dgf_pivot, annot=True, fmt='.3f', cmap='viridis',
+                cbar=False, ax=ax, linewidths=0.5)
+    ax.set_title('LOO ComBat — DGF Test AUC\n(Higher/Lighter = Better)',
+                 fontsize=12, fontweight='bold')
+    ax.set_xlabel('Test Cohort (held out)', fontsize=11)
+    ax.set_ylabel('Model', fontsize=11)
+    ax.tick_params(axis='x', rotation=20)
+
+    plt.tight_layout()
+    plt.savefig('results/figures/loo_heatmap.png', bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: loo_heatmap.png")
+
+    # ── LOO vs existing scenarios: average performance comparison ─
+    loo_egfr_avg = scenario_egfr_avg[loo_egfr_available]
+    loo_dgf_avg  = scenario_dgf_avg[loo_dgf_available]
+
+    # All scenarios split into LOO and non-LOO for grouped comparison
+    non_loo_keys  = [k for k in scenario_egfr_avg.index if k not in LOO_KEYS]
+    non_loo_egfr  = scenario_egfr_avg[non_loo_keys]
+    non_loo_dgf   = scenario_dgf_avg[non_loo_keys]
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    for ax, avg_non_loo, avg_loo, metric, better, fmt in [
+        (axes[0], non_loo_egfr, loo_egfr_avg, 'eGFR Test MSE', 'Lower', '.0f'),
+        (axes[1], non_loo_dgf,  loo_dgf_avg,  'DGF Test AUC',  'Higher', '.3f'),
+    ]:
+        x_non = np.arange(len(avg_non_loo))
+        x_loo = np.arange(len(avg_non_loo), len(avg_non_loo) + len(avg_loo))
+
+        bars1 = ax.bar(x_non, avg_non_loo.values, color='#3498db',
+                       edgecolor='black', linewidth=0.5, label='Existing scenarios')
+        bars2 = ax.bar(x_loo, avg_loo.values, color='#e67e22',
+                       edgecolor='black', linewidth=0.5, label='LOO ComBat (new)')
+
+        all_vals  = np.concatenate([avg_non_loo.values, avg_loo.values])
+        all_bars  = list(bars1) + list(bars2)
+        all_labels = list(avg_non_loo.index) + [LOO_LABELS[k] for k in loo_egfr_available]
+
+        for bar, val in zip(all_bars, all_vals):
+            ax.annotate(f'{val:{fmt}}',
+                        xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                        xytext=(0, 5), textcoords='offset points',
+                        ha='center', fontsize=9, fontweight='bold')
+
+        ax.set_xticks(np.concatenate([x_non, x_loo]))
+        ax.set_xticklabels(all_labels, rotation=35, ha='right', fontsize=9)
+        ax.set_ylabel(f'Average {metric}', fontsize=11, fontweight='bold')
+        ax.set_title(f'{metric}: All Scenarios\n({better} = Better)', fontsize=13, fontweight='bold')
+        ax.legend(fontsize=10)
+        ax.grid(axis='y', alpha=0.3)
+
+        # vertical separator between existing and LOO
+        ax.axvline(x=len(avg_non_loo) - 0.5, color='gray', linestyle='--', linewidth=1.5)
+
+    plt.tight_layout()
+    plt.savefig('results/figures/loo_vs_existing_scenarios.png', bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: loo_vs_existing_scenarios.png")
+
+    # ── LOO fold consistency: how stable is performance across folds ─
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    models = loo_egfr_pivot.index.tolist()
+    x = np.arange(len(models))
+    width = 0.25
+    fold_colors = ['#2ecc71', '#3498db', '#9b59b6']
+
+    for ax, pivot, metric, better, fmt in [
+        (axes[0], loo_egfr_pivot, 'eGFR Test MSE', 'Lower', '.0f'),
+        (axes[1], loo_dgf_pivot,  'DGF Test AUC',  'Higher', '.3f'),
+    ]:
+        for i, fold in enumerate(pivot.columns):
+            ax.bar(x + i * width, pivot[fold].values, width,
+                   label=fold, color=fold_colors[i], edgecolor='black', linewidth=0.5)
+
+        ax.set_xticks(x + width)
+        ax.set_xticklabels(models, rotation=30, ha='right', fontsize=9)
+        ax.set_ylabel(metric, fontsize=11, fontweight='bold')
+        ax.set_title(f'LOO ComBat — {metric} per Fold\n({better} = Better)',
+                     fontsize=12, fontweight='bold')
+        ax.legend(title='Held-out Cohort', fontsize=9)
+        ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig('results/figures/loo_fold_comparison.png', bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: loo_fold_comparison.png")
+
+else:
+    print("⚠ LOO results not found in scenario tables — run 03_train_models.py first")
+
 # SUMMARY
 print("\n" + "="*60)
 print("SUMMARY")
@@ -418,5 +549,4 @@ if has_ckd_data:
     print("  - ckd_stage_distribution.png")
 if has_importance_data:
     print("  - permutation_importance.png")
-
 print("\n" + "="*60)

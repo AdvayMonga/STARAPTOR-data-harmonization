@@ -17,6 +17,10 @@ SCENARIOS = {
     'Pooled Unharmonized': 'unharmonized',
     'Pooled ComBat': 'harmonized',
     'Pooled CovBat': 'covbat',
+    # Leave-one-cohort-out ComBat (advisor strategy)
+    'LOO: UC → M': 'UC_to_M',
+    'LOO: UM → C': 'UM_to_C',
+    'LOO: CM → U': 'CM_to_U',
 }
 
 # METHODS: All harmonization methods for pooled cohort comparison
