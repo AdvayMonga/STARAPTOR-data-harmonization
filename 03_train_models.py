@@ -317,3 +317,35 @@ run_train_test(
     'results/dgf_results_coral.csv',
     print_summary=True
 )
+
+# ── Leave-One-Cohort-Out (LOO) ComBat ───────────────────────
+# Harmonized CSVs produced by the LOO section of 02.5_harmonize.Rmd.
+# ComBat was fit on 2 training cohorts; parameters were applied to the
+# held-out test cohort without refitting (via predict()).
+
+LOO_SPLITS = [
+    ('UC_to_M', 'UC Davis + Coimbra → Mayo'),
+    ('UM_to_C', 'UC Davis + Mayo → Coimbra'),
+    ('CM_to_U', 'Coimbra + Mayo → UC Davis'),
+]
+
+for key, label in LOO_SPLITS:
+    train_path = f'data/loo_combat/{key}/train_harmonized.csv'
+    test_path  = f'data/loo_combat/{key}/test_harmonized.csv'
+
+    print("="*60)
+    print(f"TRAIN MODELS: LOO ComBat — {label}")
+    print("="*60)
+
+    if not os.path.exists(train_path) or not os.path.exists(test_path):
+        print(f"  Skipping — harmonized CSVs not found at data/loo_combat/{key}/")
+        print("  Run the LOO ComBat chunks in 02.5_harmonize.Rmd first.")
+        continue
+
+    run_train_test(
+        train_path,
+        test_path,
+        f'results/tables/egfr_results_{key}.csv',
+        f'results/tables/dgf_results_{key}.csv',
+        print_summary=True
+    )

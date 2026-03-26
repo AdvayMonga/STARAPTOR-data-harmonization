@@ -190,3 +190,150 @@ covbat_post_diagnostics <- visual_prep(
 
 comfam_shiny(covbat_post_diagnostics)
 ```
+
+# ─────────────────────────────────────────────────────────────
+# LEAVE-ONE-COHORT-OUT (LOO) COMBAT
+# ─────────────────────────────────────────────────────────────
+#
+# For each of the 3 combinations:
+#   1. Fit ComBat on the 2 training cohorts (full EB, covariate-adjusted)
+#   2. Apply the learned model to the held-out test cohort via predict()
+#      — no ComBat re-fitting on the test data
+#   3. Save harmonized train and test CSVs for 03_loo_combat.py
+#
+# Combinations:
+#   UC → M : train on UC Davis + Coimbra,  test on Mayo
+#   UM → C : train on UC Davis + Mayo,     test on Coimbra
+#   CM → U : train on Coimbra  + Mayo,     test on UC Davis
+
+# Load Mayo data (not loaded earlier in this file)
+```{r}
+df_m <- read.csv("data/m_image_features.csv")
+
+# feature_cols and covariates already defined above
+# Confirm M has the same features
+cat("M cohort dimensions:", dim(df_m), "\n")
+cat("Feature columns match U:", all(feature_cols %in% colnames(df_m)), "\n")
+```
+
+# LOO Helper: fit ComBat on training cohorts, apply to test cohort
+```{r}
+run_loo_combat <- function(train_list, train_labels, df_test, test_label,
+                           feature_cols, covariates, out_dir) {
+
+  # --- Build training data frame with batch labels ---
+  train_dfs <- mapply(function(df, lbl) {
+    df_prep        <- df[, c("Subject_ID", feature_cols, covariates)]
+    df_prep$batch  <- lbl
+    df_prep
+  }, train_list, train_labels, SIMPLIFY = FALSE)
+
+  df_train_combined <- do.call(rbind, train_dfs)
+  cat("  Training subjects:", nrow(df_train_combined),
+      "(", paste(train_labels, collapse = "+"), ")\n")
+
+  # --- Step 2: Fit ComBat on training cohorts ---
+  combat_fit <- combat_harm(
+    df         = df_train_combined,
+    features   = feature_cols,
+    batch      = "batch",
+    covariates = covariates,
+    type       = "lm",
+    eb         = TRUE,
+    quiet      = TRUE
+  )
+
+  harmonized_train <- combat_fit$harmonized_df
+  cat("  ComBat fit complete.\n")
+
+  # --- Step 4: Apply learned parameters to test cohort (no refitting) ---
+  df_test_prep        <- df_test[, c("Subject_ID", feature_cols, covariates)]
+  df_test_prep$batch  <- test_label
+
+  # predict() uses the fitted ComBat model to estimate and remove the test
+  # cohort's batch effect — the model is not re-fitted on the test data
+  harmonized_test_features <- predict(
+    combat_fit$ComBat.model,
+    newdata = df_test_prep,
+    batch   = "batch"
+  )
+
+  # Reassemble with metadata
+  harmonized_test <- df_test_prep
+  harmonized_test[, feature_cols] <- harmonized_test_features[, feature_cols]
+
+  cat("  Test cohort harmonized:", nrow(harmonized_test), "subjects (", test_label, ")\n")
+
+  # --- Save ---
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+  # Drop batch column before saving (Python pipeline doesn't need it)
+  train_out <- harmonized_train[, !(names(harmonized_train) %in% "batch")]
+  test_out  <- harmonized_test[,  !(names(harmonized_test)  %in% "batch")]
+
+  write.csv(train_out, file.path(out_dir, "train_harmonized.csv"), row.names = FALSE)
+  write.csv(test_out,  file.path(out_dir, "test_harmonized.csv"),  row.names = FALSE)
+
+  cat("  Saved to", out_dir, "\n")
+  invisible(list(train = harmonized_train, test = harmonized_test))
+}
+```
+
+# LOO Fold 1: Train UC Davis + Coimbra → Test Mayo
+```{r}
+cat("=" , strrep("=", 59), "\n")
+cat("LOO Fold 1: Train UC Davis + Coimbra  →  Test Mayo\n")
+cat("=" , strrep("=", 59), "\n")
+
+loo_UC_to_M <- run_loo_combat(
+  train_list   = list(df_u, df_c),
+  train_labels = c("U", "C"),
+  df_test      = df_m,
+  test_label   = "M",
+  feature_cols = feature_cols,
+  covariates   = covariates,
+  out_dir      = "data/loo_combat/UC_to_M"
+)
+
+gc(verbose = FALSE)
+```
+
+# LOO Fold 2: Train UC Davis + Mayo → Test Coimbra
+```{r}
+cat("=" , strrep("=", 59), "\n")
+cat("LOO Fold 2: Train UC Davis + Mayo  →  Test Coimbra\n")
+cat("=" , strrep("=", 59), "\n")
+
+loo_UM_to_C <- run_loo_combat(
+  train_list   = list(df_u, df_m),
+  train_labels = c("U", "M"),
+  df_test      = df_c,
+  test_label   = "C",
+  feature_cols = feature_cols,
+  covariates   = covariates,
+  out_dir      = "data/loo_combat/UM_to_C"
+)
+
+gc(verbose = FALSE)
+```
+
+# LOO Fold 3: Train Coimbra + Mayo → Test UC Davis
+```{r}
+cat("=" , strrep("=", 59), "\n")
+cat("LOO Fold 3: Train Coimbra + Mayo  →  Test UC Davis\n")
+cat("=" , strrep("=", 59), "\n")
+
+loo_CM_to_U <- run_loo_combat(
+  train_list   = list(df_c, df_m),
+  train_labels = c("C", "M"),
+  df_test      = df_u,
+  test_label   = "U",
+  feature_cols = feature_cols,
+  covariates   = covariates,
+  out_dir      = "data/loo_combat/CM_to_U"
+)
+
+gc(verbose = FALSE)
+cat("\nLOO ComBat harmonization complete.\n")
+cat("Run 03_loo_combat.py to train and evaluate models.\n")
+```
