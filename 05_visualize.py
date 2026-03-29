@@ -43,26 +43,40 @@ except FileNotFoundError:
     has_importance = False
     print("⚠ Permutation importance tables not found")
 
-# ── Filter to LOO columns ─────────────────────────────────────
-LOO_KEYS   = ['LOO: UC → M', 'LOO: UM → C', 'LOO: CM → U']
-LOO_LABELS = {
-    'LOO: UC → M': 'UC Davis + Coimbra\n→ Mayo',
-    'LOO: UM → C': 'UC Davis + Mayo\n→ Coimbra',
-    'LOO: CM → U': 'Coimbra + Mayo\n→ UC Davis',
+# ── LOO key groups ────────────────────────────────────────────
+FOLDS = ['UC → M', 'UM → C', 'CM → U']
+FOLD_LABELS = {
+    'UC → M': 'UC Davis + Coimbra\n→ Mayo',
+    'UM → C': 'UC Davis + Mayo\n→ Coimbra',
+    'CM → U': 'Coimbra + Mayo\n→ UC Davis',
 }
+STRATEGIES = {
+    'Raw':       'LOO Raw: {}',
+    'ComBat':    'LOO ComBat: {}',
+    'Harm→Raw':  'LOO Harm→Raw: {}',
+}
+STRATEGY_COLORS = {'Raw': '#e74c3c', 'ComBat': '#3498db', 'Harm→Raw': '#f39c12'}
 
-available = [k for k in LOO_KEYS if k in scenario_egfr_pivot.columns]
-if not available:
-    print("⚠ No LOO results found — run 03_train_models.py first")
+# Build per-fold, per-strategy sub-tables
+def get_loo_table(strategy_fmt, outcome_pivot):
+    keys = [strategy_fmt.format(f) for f in
+            [f'UC → M', f'UM → C', f'CM → U']]
+    available = [k for k in keys if k in outcome_pivot.columns]
+    if not available:
+        return None
+    df = outcome_pivot[available].copy()
+    df.columns = [FOLD_LABELS[k.split(': ', 1)[1]] for k in available]
+    return df
+
+combat_egfr = get_loo_table('LOO ComBat: {}', scenario_egfr_pivot)
+combat_dgf  = get_loo_table('LOO ComBat: {}', scenario_dgf_pivot)
+
+if combat_egfr is None:
+    print("⚠ No LOO ComBat results found — run 03_train_models.py first")
     raise SystemExit
 
-loo_egfr = scenario_egfr_pivot[available].copy()
-loo_dgf  = scenario_dgf_pivot[available].copy()
-loo_egfr.columns = [LOO_LABELS[k] for k in available]
-loo_dgf.columns  = [LOO_LABELS[k] for k in available]
-fold_labels = list(loo_egfr.columns)
-
-print(f"✓ LOO data: {len(loo_egfr)} models × {len(fold_labels)} folds")
+fold_labels = list(combat_egfr.columns)
+print(f"✓ LOO data: {len(combat_egfr)} models × {len(fold_labels)} folds")
 
 # ── 1. LOO Heatmaps ──────────────────────────────────────────
 print("\n" + "=" * 60)
@@ -74,10 +88,10 @@ fig, axes = plt.subplots(1, 2, figsize=(13, 6))
 # eGFR heatmap (rank-colored, values annotated)
 ax = axes[0]
 egfr_ranks = pd.DataFrame(
-    rankdata(loo_egfr.values.flatten()).reshape(loo_egfr.shape),
-    index=loo_egfr.index, columns=loo_egfr.columns
+    rankdata(combat_egfr.values.flatten()).reshape(combat_egfr.shape),
+    index=combat_egfr.index, columns=combat_egfr.columns
 )
-sns.heatmap(egfr_ranks, annot=loo_egfr, fmt='.0f', cmap='viridis_r',
+sns.heatmap(egfr_ranks, annot=combat_egfr, fmt='.0f', cmap='viridis_r',
             cbar=False, ax=ax, linewidths=0.5)
 ax.set_title('LOO ComBat — eGFR Test MSE\n(Lower / Lighter = Better, colors by rank)',
              fontsize=12, fontweight='bold')
@@ -87,7 +101,7 @@ ax.tick_params(axis='x', rotation=20)
 
 # DGF heatmap
 ax = axes[1]
-sns.heatmap(loo_dgf, annot=True, fmt='.3f', cmap='viridis',
+sns.heatmap(combat_dgf, annot=True, fmt='.3f', cmap='viridis',
             cbar=False, ax=ax, linewidths=0.5)
 ax.set_title('LOO ComBat — DGF Test AUC\n(Higher / Lighter = Better)',
              fontsize=12, fontweight='bold')
@@ -100,46 +114,61 @@ plt.savefig('results/figures/loo_heatmap.png', bbox_inches='tight')
 plt.close()
 print("✓ Saved: loo_heatmap.png")
 
-# ── 2. LOO Average Performance (per model, averaged across folds) ──
+# ── 2. LOO Average Performance — all 3 strategies, grouped by model ──
 print("\n" + "=" * 60)
 print("GENERATING LOO AVERAGE PERFORMANCE")
 print("=" * 60)
 
-egfr_avg = loo_egfr.mean(axis=1)   # avg MSE per model
-dgf_avg  = loo_dgf.mean(axis=1)    # avg AUC per model
+raw_egfr       = get_loo_table('LOO Raw: {}',      scenario_egfr_pivot)
+harmtrain_egfr = get_loo_table('LOO Harm→Raw: {}', scenario_egfr_pivot)
+raw_dgf        = get_loo_table('LOO Raw: {}',      scenario_dgf_pivot)
+harmtrain_dgf  = get_loo_table('LOO Harm→Raw: {}', scenario_dgf_pivot)
 
-fig, axes = plt.subplots(1, 2, figsize=(13, 6))
+strat_avgs_egfr = {
+    'Unharmonized': raw_egfr.mean(axis=1)       if raw_egfr       is not None else None,
+    'LOO ComBat':   combat_egfr.mean(axis=1),
+    'Harm→Raw':     harmtrain_egfr.mean(axis=1) if harmtrain_egfr is not None else None,
+}
+strat_avgs_dgf = {
+    'Unharmonized': raw_dgf.mean(axis=1)        if raw_dgf        is not None else None,
+    'LOO ComBat':   combat_dgf.mean(axis=1),
+    'Harm→Raw':     harmtrain_dgf.mean(axis=1)  if harmtrain_dgf  is not None else None,
+}
+strat_colors = {'Unharmonized': '#e74c3c', 'LOO ComBat': '#3498db', 'Harm→Raw': '#f39c12'}
 
-colors_egfr = ['#2ecc71' if v == egfr_avg.min() else '#3498db' for v in egfr_avg]
-colors_dgf  = ['#2ecc71' if v == dgf_avg.max()  else '#3498db' for v in dgf_avg]
+models = combat_egfr.index.tolist()
+x = np.arange(len(models))
+n_strats = sum(v is not None for v in strat_avgs_egfr.values())
+bar_w = 0.25
 
-ax = axes[0]
-bars = ax.bar(egfr_avg.index, egfr_avg.values, color=colors_egfr,
-              edgecolor='black', linewidth=0.5)
-ax.set_yscale('function', functions=(lambda x: np.sqrt(x), lambda x: x**2))
-for bar, val in zip(bars, egfr_avg.values):
-    ax.annotate(f'{val:.0f}',
-                xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                xytext=(0, 5), textcoords='offset points',
-                ha='center', fontsize=10, fontweight='bold')
-ax.set_xlabel('Model', fontsize=12, fontweight='bold')
-ax.set_ylabel('Average Test MSE (sqrt scale)', fontsize=12, fontweight='bold')
-ax.set_title('eGFR: Average Test MSE Across LOO Folds\n(Lower = Better, sqrt scale  |  Green = best)',
-             fontsize=13, fontweight='bold')
+fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 
-ax = axes[1]
-bars = ax.bar(dgf_avg.index, dgf_avg.values, color=colors_dgf,
-              edgecolor='black', linewidth=0.5)
-ax.set_ylim(0, 1.0)
-for bar, val in zip(bars, dgf_avg.values):
-    ax.annotate(f'{val:.3f}',
-                xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                xytext=(0, 5), textcoords='offset points',
-                ha='center', fontsize=10, fontweight='bold')
-ax.set_xlabel('Model', fontsize=12, fontweight='bold')
-ax.set_ylabel('Average Test AUC', fontsize=12, fontweight='bold')
-ax.set_title('DGF: Average Test AUC Across LOO Folds\n(Higher = Better  |  Green = best)',
-             fontsize=13, fontweight='bold')
+for ax, avgs, metric, better, fmt, ylim in [
+    (axes[0], strat_avgs_egfr, 'eGFR Test MSE', 'Lower', '.0f', None),
+    (axes[1], strat_avgs_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05)),
+]:
+    i = 0
+    for name, series in avgs.items():
+        if series is None:
+            continue
+        bars = ax.bar(x + i * bar_w, series.values, bar_w,
+                      label=name, color=strat_colors[name],
+                      edgecolor='black', linewidth=0.5)
+        for bar, val in zip(bars, series.values):
+            ax.annotate(f'{val:{fmt}}',
+                        xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                        xytext=(0, 4), textcoords='offset points',
+                        ha='center', fontsize=8, fontweight='bold')
+        i += 1
+    ax.set_xticks(x + bar_w)
+    ax.set_xticklabels(models, rotation=20, ha='right', fontsize=10)
+    ax.set_ylabel(f'Avg {metric} (across folds)', fontsize=11, fontweight='bold')
+    ax.set_title(f'{metric}: Strategy Comparison per Model\n({better} = Better  |  avg across 3 folds)',
+                 fontsize=12, fontweight='bold')
+    ax.legend(title='Strategy', fontsize=10)
+    ax.grid(axis='y', alpha=0.3)
+    if ylim:
+        ax.set_ylim(ylim)
 
 plt.tight_layout()
 plt.savefig('results/figures/loo_avg_performance.png', bbox_inches='tight')
@@ -152,15 +181,15 @@ print("GENERATING LOO FOLD COMPARISON")
 print("=" * 60)
 
 fold_colors = ['#2ecc71', '#3498db', '#9b59b6']
-models = loo_egfr.index.tolist()
+models = combat_egfr.index.tolist()
 x = np.arange(len(models))
 width = 0.25
 
 fig, axes = plt.subplots(2, 1, figsize=(13, 10))
 
 for ax, pivot, metric, better, fmt, ylim in [
-    (axes[0], loo_egfr, 'eGFR Test MSE', 'Lower', '.0f', None),
-    (axes[1], loo_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05)),
+    (axes[0], combat_egfr, 'eGFR Test MSE', 'Lower', '.0f', None),
+    (axes[1], combat_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05)),
 ]:
     for i, fold in enumerate(pivot.columns):
         ax.bar(x + i * width, pivot[fold].values, width,
@@ -181,7 +210,71 @@ plt.savefig('results/figures/loo_fold_comparison.png', bbox_inches='tight')
 plt.close()
 print("✓ Saved: loo_fold_comparison.png")
 
-# ── 4. CKD Stage Distribution ────────────────────────────────
+# ── 4. Strategy Comparison: Raw vs ComBat vs Harm→Raw ────────
+print("\n" + "=" * 60)
+print("GENERATING LOO STRATEGY COMPARISON")
+print("=" * 60)
+
+raw_egfr      = get_loo_table('LOO Raw: {}',      scenario_egfr_pivot)
+harmtrain_egfr = get_loo_table('LOO Harm→Raw: {}', scenario_egfr_pivot)
+raw_dgf        = get_loo_table('LOO Raw: {}',      scenario_dgf_pivot)
+harmtrain_dgf  = get_loo_table('LOO Harm→Raw: {}', scenario_dgf_pivot)
+
+if raw_egfr is not None and harmtrain_egfr is not None:
+    fig, axes = plt.subplots(2, 1, figsize=(15, 11))
+
+    strategy_data_egfr = [
+        ('Unharmonized', raw_egfr,      '#e74c3c'),
+        ('LOO ComBat',   combat_egfr,   '#3498db'),
+        ('Harm→Raw',     harmtrain_egfr,'#f39c12'),
+    ]
+    strategy_data_dgf = [
+        ('Unharmonized', raw_dgf,       '#e74c3c'),
+        ('LOO ComBat',   combat_dgf,    '#3498db'),
+        ('Harm→Raw',     harmtrain_dgf, '#f39c12'),
+    ]
+
+    for ax, strat_data, metric, better, fmt, ylim in [
+        (axes[0], strategy_data_egfr, 'eGFR Test MSE', 'Lower', '.0f', None),
+        (axes[1], strategy_data_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05)),
+    ]:
+        n_strats = len(strat_data)
+        n_folds  = len(fold_labels)
+        # group by fold: within each fold show n_strats bars per model averaged across models
+        # instead show bars grouped by fold for avg across models
+        fold_x = np.arange(n_folds)
+        bar_w  = 0.25
+
+        for i, (name, df, color) in enumerate(strat_data):
+            if df is None:
+                continue
+            avgs = df.mean(axis=0).values  # avg across models per fold
+            bars = ax.bar(fold_x + i * bar_w, avgs, bar_w,
+                          label=name, color=color, edgecolor='black', linewidth=0.5)
+            for bar, val in zip(bars, avgs):
+                ax.annotate(f'{val:{fmt}}',
+                            xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                            xytext=(0, 4), textcoords='offset points',
+                            ha='center', fontsize=8, fontweight='bold')
+
+        ax.set_xticks(fold_x + bar_w)
+        ax.set_xticklabels(fold_labels, fontsize=10)
+        ax.set_ylabel(f'Avg {metric} (across models)', fontsize=11, fontweight='bold')
+        ax.set_title(f'{metric}: Unharmonized vs LOO ComBat vs Harm→Raw\n({better} = Better)',
+                     fontsize=13, fontweight='bold')
+        ax.legend(title='Strategy', fontsize=10)
+        ax.grid(axis='y', alpha=0.3)
+        if ylim:
+            ax.set_ylim(ylim)
+
+    plt.tight_layout()
+    plt.savefig('results/figures/loo_strategy_comparison.png', bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: loo_strategy_comparison.png")
+else:
+    print("⚠ Raw/Harm→Raw results not found — run 03_train_models.py first")
+
+# ── 5. CKD Stage Distribution ────────────────────────────────
 if has_ckd:
     print("\n" + "=" * 60)
     print("GENERATING CKD STAGE DISTRIBUTION")
@@ -248,6 +341,7 @@ print("=" * 60)
 print("  - loo_heatmap.png")
 print("  - loo_avg_performance.png")
 print("  - loo_fold_comparison.png")
+print("  - loo_strategy_comparison.png")
 if has_ckd:        print("  - ckd_stage_distribution.png")
 if has_importance: print("  - permutation_importance.png")
 print("=" * 60)

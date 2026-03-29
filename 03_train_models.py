@@ -318,10 +318,21 @@ run_train_test(
     print_summary=True
 )
 
-# ── Leave-One-Cohort-Out (LOO) ComBat ───────────────────────
-# Harmonized CSVs produced by the LOO section of 02.5_harmonize.Rmd.
-# ComBat was fit on 2 training cohorts; parameters were applied to the
-# held-out test cohort without refitting (via predict()).
+# ── Helpers ──────────────────────────────────────────────────
+import re
+
+def to_r_colname(name):
+    """Replicate R's make.names() column conversion (special chars → dots)."""
+    return re.sub(r'[^A-Za-z0-9._]', '.', name)
+
+# ── Raw cohort lookup ────────────────────────────────────────
+RAW_COHORT_FILES = {
+    'U': 'data/u_image_features.csv',
+    'C': 'data/c_image_features.csv',
+    'M': 'data/m_image_features.csv',
+}
+LOO_TRAIN_COHORTS = {'UC_to_M': ['U', 'C'], 'UM_to_C': ['U', 'M'], 'CM_to_U': ['C', 'M']}
+LOO_TEST_COHORTS  = {'UC_to_M': 'M',        'UM_to_C': 'C',        'CM_to_U': 'U'}
 
 LOO_SPLITS = [
     ('UC_to_M', 'UC Davis + Coimbra → Mayo'),
@@ -329,6 +340,33 @@ LOO_SPLITS = [
     ('CM_to_U', 'Coimbra + Mayo → UC Davis'),
 ]
 
+# ── LOO Strategy 1: Unharmonized (raw train, raw test) ───────
+for key, label in LOO_SPLITS:
+    print("="*60)
+    print(f"TRAIN MODELS: LOO Unharmonized — {label}")
+    print("="*60)
+
+    df_train = pd.concat(
+        [pd.read_csv(RAW_COHORT_FILES[c]) for c in LOO_TRAIN_COHORTS[key]],
+        ignore_index=True
+    )
+    df_test = pd.read_csv(RAW_COHORT_FILES[LOO_TEST_COHORTS[key]])
+
+    os.makedirs(f'data/loo_combat/{key}', exist_ok=True)
+    df_train.to_csv(f'data/loo_combat/{key}/train_raw.csv', index=False)
+    df_test.to_csv(f'data/loo_combat/{key}/test_raw.csv',   index=False)
+
+    run_train_test(
+        f'data/loo_combat/{key}/train_raw.csv',
+        f'data/loo_combat/{key}/test_raw.csv',
+        f'results/tables/egfr_results_{key}_raw.csv',
+        f'results/tables/dgf_results_{key}_raw.csv',
+        print_summary=True
+    )
+
+# ── LOO Strategy 2: ComBat (harmonized train, harmonized test) ──
+# ComBat was fit on 2 training cohorts; parameters were applied to the
+# held-out test cohort without refitting (via predict()).
 for key, label in LOO_SPLITS:
     train_path = f'data/loo_combat/{key}/train_harmonized.csv'
     test_path  = f'data/loo_combat/{key}/test_harmonized.csv'
@@ -347,5 +385,35 @@ for key, label in LOO_SPLITS:
         test_path,
         f'results/tables/egfr_results_{key}.csv',
         f'results/tables/dgf_results_{key}.csv',
+        print_summary=True
+    )
+
+# ── LOO Strategy 3: Harm Train / Raw Test ────────────────────
+# Train on ComBat-harmonized data; test on raw held-out cohort.
+# Simulates deploying to a new site that hasn't been harmonized.
+# R renames columns when harmonizing (spaces/parens → dots), so we
+# rename the raw test columns to match before running.
+for key, label in LOO_SPLITS:
+    train_path = f'data/loo_combat/{key}/train_harmonized.csv'
+
+    print("="*60)
+    print(f"TRAIN MODELS: LOO Harm Train / Raw Test — {label}")
+    print("="*60)
+
+    if not os.path.exists(train_path):
+        print(f"  Skipping — harmonized train not found. Run harmonize script first.")
+        continue
+
+    # Rename raw test columns to match R-style harmonized column names
+    df_test_raw = pd.read_csv(RAW_COHORT_FILES[LOO_TEST_COHORTS[key]])
+    df_test_raw.columns = [to_r_colname(c) for c in df_test_raw.columns]
+    test_rnamed_path = f'data/loo_combat/{key}/test_raw_rnamed.csv'
+    df_test_raw.to_csv(test_rnamed_path, index=False)
+
+    run_train_test(
+        train_path,
+        test_rnamed_path,
+        f'results/tables/egfr_results_{key}_harm_train.csv',
+        f'results/tables/dgf_results_{key}_harm_train.csv',
         print_summary=True
     )

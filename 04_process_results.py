@@ -17,10 +17,18 @@ SCENARIOS = {
     'Pooled Unharmonized': 'unharmonized',
     'Pooled ComBat': 'harmonized',
     'Pooled CovBat': 'covbat',
-    # Leave-one-cohort-out ComBat (advisor strategy)
-    'LOO: UC → M': 'UC_to_M',
-    'LOO: UM → C': 'UM_to_C',
-    'LOO: CM → U': 'CM_to_U',
+    # LOO Strategy 1: Unharmonized baseline (raw train, raw test)
+    'LOO Raw: UC → M': 'UC_to_M_raw',
+    'LOO Raw: UM → C': 'UM_to_C_raw',
+    'LOO Raw: CM → U': 'CM_to_U_raw',
+    # LOO Strategy 2: ComBat (harmonized train, harmonized test)
+    'LOO ComBat: UC → M': 'UC_to_M',
+    'LOO ComBat: UM → C': 'UM_to_C',
+    'LOO ComBat: CM → U': 'CM_to_U',
+    # LOO Strategy 3: Harm train / raw test (deployment simulation)
+    'LOO Harm→Raw: UC → M': 'UC_to_M_harm_train',
+    'LOO Harm→Raw: UM → C': 'UM_to_C_harm_train',
+    'LOO Harm→Raw: CM → U': 'CM_to_U_harm_train',
 }
 
 # METHODS: All harmonization methods for pooled cohort comparison
@@ -60,11 +68,11 @@ scenario_dgf = load_results(SCENARIOS, 'dgf')
 method_egfr = load_results(METHODS, 'egfr')
 method_dgf = load_results(METHODS, 'dgf')
 
-# Combine into DataFrames
-df_scenario_egfr = pd.concat(scenario_egfr.values()).reset_index().rename(columns={'index': 'Model'})
-df_scenario_dgf = pd.concat(scenario_dgf.values()).reset_index().rename(columns={'index': 'Model'})
-df_method_egfr = pd.concat(method_egfr.values()).reset_index().rename(columns={'index': 'Model'})
-df_method_dgf = pd.concat(method_dgf.values()).reset_index().rename(columns={'index': 'Model'})
+# Combine into DataFrames (skip gracefully if nothing loaded)
+df_scenario_egfr = pd.concat(scenario_egfr.values()).reset_index().rename(columns={'index': 'Model'}) if scenario_egfr else pd.DataFrame()
+df_scenario_dgf  = pd.concat(scenario_dgf.values()).reset_index().rename(columns={'index': 'Model'})  if scenario_dgf  else pd.DataFrame()
+df_method_egfr   = pd.concat(method_egfr.values()).reset_index().rename(columns={'index': 'Model'})   if method_egfr   else pd.DataFrame()
+df_method_dgf    = pd.concat(method_dgf.values()).reset_index().rename(columns={'index': 'Model'})    if method_dgf    else pd.DataFrame()
 
 # SUMMARY TABLES
 print("\n" + "="*60)
@@ -83,17 +91,22 @@ scenario_dgf_pivot = scenario_dgf_pivot[[k for k in SCENARIOS.keys() if k in sce
 print("\nDGF Test AUC by Scenario (Higher = Better):")
 print(scenario_dgf_pivot.round(3).to_string())
 
-# METHODS Tables
-print("\n--- METHOD COMPARISON ---")
-method_egfr_pivot = df_method_egfr.pivot(index='Model', columns='Group', values='Test MSE')
-method_egfr_pivot = method_egfr_pivot[[k for k in METHODS.keys() if k in method_egfr_pivot.columns]]
-print("\neGFR Test MSE by Method (Lower = Better):")
-print(method_egfr_pivot.round(1).to_string())
+# METHODS Tables (skip if no method results loaded)
+if not df_method_egfr.empty:
+    print("\n--- METHOD COMPARISON ---")
+    method_egfr_pivot = df_method_egfr.pivot(index='Model', columns='Group', values='Test MSE')
+    method_egfr_pivot = method_egfr_pivot[[k for k in METHODS.keys() if k in method_egfr_pivot.columns]]
+    print("\neGFR Test MSE by Method (Lower = Better):")
+    print(method_egfr_pivot.round(1).to_string())
 
-method_dgf_pivot = df_method_dgf.pivot(index='Model', columns='Group', values='Test AUC')
-method_dgf_pivot = method_dgf_pivot[[k for k in METHODS.keys() if k in method_dgf_pivot.columns]]
-print("\nDGF Test AUC by Method (Higher = Better):")
-print(method_dgf_pivot.round(3).to_string())
+    method_dgf_pivot = df_method_dgf.pivot(index='Model', columns='Group', values='Test AUC')
+    method_dgf_pivot = method_dgf_pivot[[k for k in METHODS.keys() if k in method_dgf_pivot.columns]]
+    print("\nDGF Test AUC by Method (Higher = Better):")
+    print(method_dgf_pivot.round(3).to_string())
+else:
+    print("\n--- METHOD COMPARISON --- (skipped, no method results found)")
+    method_egfr_pivot = pd.DataFrame()
+    method_dgf_pivot  = pd.DataFrame()
 
 # Save pivot tables
 scenario_egfr_pivot.to_csv('results/tables/egfr_scenario_summary.csv')
@@ -114,18 +127,20 @@ scenario_egfr_avg = scenario_egfr_avg.reindex([k for k in SCENARIOS.keys() if k 
 scenario_dgf_avg = df_scenario_dgf.groupby('Group')['Test AUC'].mean()
 scenario_dgf_avg = scenario_dgf_avg.reindex([k for k in SCENARIOS.keys() if k in scenario_dgf_avg.index])
 
-# Calculate averages across all models for METHODS
-method_egfr_avg = df_method_egfr.groupby('Group')['Test MSE'].mean()
-method_egfr_avg = method_egfr_avg.reindex([k for k in METHODS.keys() if k in method_egfr_avg.index])
+if not df_method_egfr.empty:
+    method_egfr_avg = df_method_egfr.groupby('Group')['Test MSE'].mean()
+    method_egfr_avg = method_egfr_avg.reindex([k for k in METHODS.keys() if k in method_egfr_avg.index])
+    method_dgf_avg  = df_method_dgf.groupby('Group')['Test AUC'].mean()
+    method_dgf_avg  = method_dgf_avg.reindex([k for k in METHODS.keys() if k in method_dgf_avg.index])
+    method_egfr_avg.to_csv('results/tables/egfr_method_avg.csv', header=['Avg Test MSE'])
+    method_dgf_avg.to_csv('results/tables/dgf_method_avg.csv', header=['Avg Test AUC'])
+else:
+    method_egfr_avg = pd.Series(dtype=float)
+    method_dgf_avg  = pd.Series(dtype=float)
 
-method_dgf_avg = df_method_dgf.groupby('Group')['Test AUC'].mean()
-method_dgf_avg = method_dgf_avg.reindex([k for k in METHODS.keys() if k in method_dgf_avg.index])
-
-# Save averages
+# Save scenario averages
 scenario_egfr_avg.to_csv('results/tables/egfr_scenario_avg.csv', header=['Avg Test MSE'])
 scenario_dgf_avg.to_csv('results/tables/dgf_scenario_avg.csv', header=['Avg Test AUC'])
-method_egfr_avg.to_csv('results/tables/egfr_method_avg.csv', header=['Avg Test MSE'])
-method_dgf_avg.to_csv('results/tables/dgf_method_avg.csv', header=['Avg Test AUC'])
 print("✓ Saved average performance tables")
 
 # IMPROVEMENT TABLES

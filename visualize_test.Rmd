@@ -23,17 +23,28 @@ egfr_importance     <- read.csv('results/tables/egfr_permutation_importance.csv'
 dgf_importance      <- read.csv('results/tables/dgf_permutation_importance.csv')
 ckd_distribution    <- read.csv('results/tables/ckd_stage_distribution.csv')
 
-LOO_COLS   <- c("LOO: UC → M", "LOO: UM → C", "LOO: CM → U")
-LOO_LABELS <- c("UC Davis + Coimbra\n→ Mayo",
-                "UC Davis + Mayo\n→ Coimbra",
-                "Coimbra + Mayo\n→ UC Davis")
+FOLD_SUFFIXES <- c("UC → M", "UM → C", "CM → U")
+FOLD_LABELS   <- c("UC Davis + Coimbra\n→ Mayo",
+                   "UC Davis + Mayo\n→ Coimbra",
+                   "Coimbra + Mayo\n→ UC Davis")
 
-loo_egfr <- scenario_egfr_pivot[, LOO_COLS]
-loo_dgf  <- scenario_dgf_pivot[,  LOO_COLS]
-colnames(loo_egfr) <- LOO_LABELS
-colnames(loo_dgf)  <- LOO_LABELS
+get_loo_table <- function(prefix, pivot) {
+  cols <- paste0(prefix, FOLD_SUFFIXES)
+  cols <- cols[cols %in% colnames(pivot)]
+  if (length(cols) == 0) return(NULL)
+  df <- pivot[, cols, drop = FALSE]
+  colnames(df) <- FOLD_LABELS[match(cols, paste0(prefix, FOLD_SUFFIXES))]
+  df
+}
 
-cat("Loaded LOO results for", nrow(loo_egfr), "models across", ncol(loo_egfr), "folds\n")
+combat_egfr    <- get_loo_table("LOO ComBat: ",   scenario_egfr_pivot)
+combat_dgf     <- get_loo_table("LOO ComBat: ",   scenario_dgf_pivot)
+raw_egfr       <- get_loo_table("LOO Raw: ",      scenario_egfr_pivot)
+raw_dgf        <- get_loo_table("LOO Raw: ",      scenario_dgf_pivot)
+harmtrain_egfr <- get_loo_table("LOO Harm→Raw: ", scenario_egfr_pivot)
+harmtrain_dgf  <- get_loo_table("LOO Harm→Raw: ", scenario_dgf_pivot)
+
+cat("Loaded LOO results for", nrow(combat_egfr), "models across", ncol(combat_egfr), "folds\n")
 ```
 
 ---
@@ -41,11 +52,11 @@ cat("Loaded LOO results for", nrow(loo_egfr), "models across", ncol(loo_egfr), "
 # LOO Heatmap — eGFR Test MSE
 
 ```{r loo_heatmap_egfr, fig.width=9, fig.height=5}
-melt_egfr <- loo_egfr %>%
+melt_egfr <- combat_egfr %>%
   rownames_to_column("Model") %>%
   pivot_longer(-Model, names_to = "Fold", values_to = "Test_MSE") %>%
-  mutate(Fold  = factor(Fold,  levels = LOO_LABELS),
-         Model = factor(Model, levels = rownames(loo_egfr)),
+  mutate(Fold  = factor(Fold,  levels = FOLD_LABELS),
+         Model = factor(Model, levels = rownames(combat_egfr)),
          MSE_rank = rank(Test_MSE))
 
 ggplot(melt_egfr, aes(x = Fold, y = Model, fill = MSE_rank)) +
@@ -65,11 +76,11 @@ ggplot(melt_egfr, aes(x = Fold, y = Model, fill = MSE_rank)) +
 # LOO Heatmap — DGF Test AUC
 
 ```{r loo_heatmap_dgf, fig.width=9, fig.height=5}
-melt_dgf <- loo_dgf %>%
+melt_dgf <- combat_dgf %>%
   rownames_to_column("Model") %>%
   pivot_longer(-Model, names_to = "Fold", values_to = "Test_AUC") %>%
-  mutate(Fold  = factor(Fold,  levels = LOO_LABELS),
-         Model = factor(Model, levels = rownames(loo_dgf)))
+  mutate(Fold  = factor(Fold,  levels = FOLD_LABELS),
+         Model = factor(Model, levels = rownames(combat_dgf)))
 
 ggplot(melt_dgf, aes(x = Fold, y = Model, fill = Test_AUC)) +
   geom_tile(color = "white", linewidth = 0.5) +
@@ -89,14 +100,14 @@ ggplot(melt_dgf, aes(x = Fold, y = Model, fill = Test_AUC)) +
 
 ```{r loo_avg_performance, fig.width=14, fig.height=6}
 egfr_avg <- data.frame(
-  Model = rownames(loo_egfr),
-  avg   = rowMeans(loo_egfr)
+  Model = rownames(combat_egfr),
+  avg   = rowMeans(combat_egfr)
 ) %>% mutate(Model = factor(Model, levels = Model),
              is_best = avg == min(avg))
 
 dgf_avg <- data.frame(
-  Model = rownames(loo_dgf),
-  avg   = rowMeans(loo_dgf)
+  Model = rownames(combat_dgf),
+  avg   = rowMeans(combat_dgf)
 ) %>% mutate(Model = factor(Model, levels = Model),
              is_best = avg == max(avg))
 
@@ -130,20 +141,20 @@ grid.arrange(p1, p2, ncol = 2)
 ```{r loo_fold_comparison, fig.width=14, fig.height=10}
 fold_colors <- c("#2ecc71", "#3498db", "#9b59b6")
 
-egfr_long <- loo_egfr %>%
+egfr_long <- combat_egfr %>%
   rownames_to_column("Model") %>%
   pivot_longer(-Model, names_to = "Fold", values_to = "Test_MSE") %>%
-  mutate(Fold = factor(Fold, levels = LOO_LABELS))
+  mutate(Fold = factor(Fold, levels = FOLD_LABELS))
 
-dgf_long <- loo_dgf %>%
+dgf_long <- combat_dgf %>%
   rownames_to_column("Model") %>%
   pivot_longer(-Model, names_to = "Fold", values_to = "Test_AUC") %>%
-  mutate(Fold = factor(Fold, levels = LOO_LABELS))
+  mutate(Fold = factor(Fold, levels = FOLD_LABELS))
 
 p1 <- ggplot(egfr_long, aes(x = Model, y = Test_MSE, fill = Fold)) +
   geom_col(position = position_dodge(width = 0.8),
            color = "black", linewidth = 0.3, width = 0.7) +
-  scale_fill_manual(values = setNames(fold_colors, LOO_LABELS)) +
+  scale_fill_manual(values = setNames(fold_colors, FOLD_LABELS)) +
   labs(title = "eGFR Test MSE per LOO Fold",
        subtitle = "Lower = Better  |  Each bar = one held-out cohort",
        x = "Model", y = "Test MSE", fill = "Held-Out Cohort") +
@@ -153,12 +164,74 @@ p1 <- ggplot(egfr_long, aes(x = Model, y = Test_MSE, fill = Fold)) +
 p2 <- ggplot(dgf_long, aes(x = Model, y = Test_AUC, fill = Fold)) +
   geom_col(position = position_dodge(width = 0.8),
            color = "black", linewidth = 0.3, width = 0.7) +
-  scale_fill_manual(values = setNames(fold_colors, LOO_LABELS)) +
+  scale_fill_manual(values = setNames(fold_colors, FOLD_LABELS)) +
   scale_y_continuous(limits = c(0, 1)) +
   labs(title = "DGF Test AUC per LOO Fold",
        subtitle = "Higher = Better  |  Each bar = one held-out cohort",
        x = "Model", y = "Test AUC", fill = "Held-Out Cohort") +
   theme(plot.title = element_text(face = "bold", size = 14),
+        legend.position = "top")
+
+grid.arrange(p1, p2, nrow = 2)
+```
+
+---
+
+# Strategy Comparison: Unharmonized vs LOO ComBat vs Harm→Raw
+
+```{r strategy_comparison, fig.width=15, fig.height=11}
+strategy_colors <- c("Unharmonized" = "#e74c3c",
+                     "LOO ComBat"   = "#3498db",
+                     "Harm→Raw"     = "#f39c12")
+
+build_avg_df <- function(df, strategy) {
+  if (is.null(df)) return(NULL)
+  data.frame(
+    Fold     = factor(colnames(df), levels = FOLD_LABELS),
+    avg      = colMeans(df, na.rm = TRUE),
+    Strategy = strategy
+  )
+}
+
+egfr_strats <- bind_rows(
+  build_avg_df(raw_egfr,       "Unharmonized"),
+  build_avg_df(combat_egfr,    "LOO ComBat"),
+  build_avg_df(harmtrain_egfr, "Harm→Raw")
+) %>% mutate(Strategy = factor(Strategy, levels = names(strategy_colors)))
+
+dgf_strats <- bind_rows(
+  build_avg_df(raw_dgf,       "Unharmonized"),
+  build_avg_df(combat_dgf,    "LOO ComBat"),
+  build_avg_df(harmtrain_dgf, "Harm→Raw")
+) %>% mutate(Strategy = factor(Strategy, levels = names(strategy_colors)))
+
+p1 <- ggplot(egfr_strats, aes(x = Fold, y = avg, fill = Strategy)) +
+  geom_col(position = position_dodge(width = 0.8),
+           color = "black", linewidth = 0.3, width = 0.7) +
+  geom_text(aes(label = round(avg, 0)),
+            position = position_dodge(width = 0.8),
+            vjust = -0.4, fontface = "bold", size = 3.5) +
+  scale_fill_manual(values = strategy_colors) +
+  labs(title = "eGFR: Strategy Comparison per LOO Fold",
+       subtitle = "Average Test MSE across models  |  Lower = Better",
+       x = "Held-Out Test Cohort", y = "Avg Test MSE", fill = "Strategy") +
+  theme(axis.text.x  = element_text(angle = 20, hjust = 1),
+        plot.title    = element_text(face = "bold", size = 14),
+        legend.position = "top")
+
+p2 <- ggplot(dgf_strats, aes(x = Fold, y = avg, fill = Strategy)) +
+  geom_col(position = position_dodge(width = 0.8),
+           color = "black", linewidth = 0.3, width = 0.7) +
+  geom_text(aes(label = sprintf("%.3f", avg)),
+            position = position_dodge(width = 0.8),
+            vjust = -0.4, fontface = "bold", size = 3.5) +
+  scale_fill_manual(values = strategy_colors) +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(title = "DGF: Strategy Comparison per LOO Fold",
+       subtitle = "Average Test AUC across models  |  Higher = Better",
+       x = "Held-Out Test Cohort", y = "Avg Test AUC", fill = "Strategy") +
+  theme(axis.text.x  = element_text(angle = 20, hjust = 1),
+        plot.title    = element_text(face = "bold", size = 14),
         legend.position = "top")
 
 grid.arrange(p1, p2, nrow = 2)
