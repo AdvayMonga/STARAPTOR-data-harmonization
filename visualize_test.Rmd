@@ -1,5 +1,5 @@
 ---
-title: "Harmonization Performance Visualization - Test"
+title: "LOO ComBat — Harmonization Performance"
 output: html_document
 ---
 
@@ -17,295 +17,149 @@ theme_set(theme_minimal(base_size = 12))
 # Load Pre-computed Tables
 
 ```{r load_data}
-# Summary pivot tables (from 04_process_results.py)
 scenario_egfr_pivot <- read.csv('results/tables/egfr_scenario_summary.csv', row.names = 1, check.names = FALSE)
-scenario_dgf_pivot <- read.csv('results/tables/dgf_scenario_summary.csv', row.names = 1, check.names = FALSE)
-method_egfr_pivot <- read.csv('results/tables/egfr_method_summary.csv', row.names = 1, check.names = FALSE)
-method_dgf_pivot <- read.csv('results/tables/dgf_method_summary.csv', row.names = 1, check.names = FALSE)
+scenario_dgf_pivot  <- read.csv('results/tables/dgf_scenario_summary.csv',  row.names = 1, check.names = FALSE)
+egfr_importance     <- read.csv('results/tables/egfr_permutation_importance.csv')
+dgf_importance      <- read.csv('results/tables/dgf_permutation_importance.csv')
+ckd_distribution    <- read.csv('results/tables/ckd_stage_distribution.csv')
 
-# Improvement tables
-egfr_improve_by_model <- read.csv('results/tables/egfr_improvement_by_model.csv', row.names = 1, check.names = FALSE)
-dgf_improve_by_model <- read.csv('results/tables/dgf_improvement_by_model.csv', row.names = 1, check.names = FALSE)
+LOO_COLS   <- c("LOO: UC → M", "LOO: UM → C", "LOO: CM → U")
+LOO_LABELS <- c("UC Davis + Coimbra\n→ Mayo",
+                "UC Davis + Mayo\n→ Coimbra",
+                "Coimbra + Mayo\n→ UC Davis")
 
-# CKD distribution and permutation importance
-ckd_distribution <- read.csv('results/tables/ckd_stage_distribution.csv')
-egfr_importance <- read.csv('results/tables/egfr_permutation_importance.csv')
-dgf_importance <- read.csv('results/tables/dgf_permutation_importance.csv')
+loo_egfr <- scenario_egfr_pivot[, LOO_COLS]
+loo_dgf  <- scenario_dgf_pivot[,  LOO_COLS]
+colnames(loo_egfr) <- LOO_LABELS
+colnames(loo_dgf)  <- LOO_LABELS
 
-cat("Loaded all pre-computed tables from results/tables/\n")
+cat("Loaded LOO results for", nrow(loo_egfr), "models across", ncol(loo_egfr), "folds\n")
 ```
 
 ---
 
-# Scenario Heatmap - eGFR
+# LOO Heatmap — eGFR Test MSE
 
-```{r scenario_heatmap_egfr, fig.width=10, fig.height=6}
-melt_data <- scenario_egfr_pivot %>%
+```{r loo_heatmap_egfr, fig.width=9, fig.height=5}
+melt_egfr <- loo_egfr %>%
   rownames_to_column("Model") %>%
-  pivot_longer(-Model, names_to = "Scenario", values_to = "Test_MSE") %>%
-  mutate(Scenario = factor(Scenario, levels = colnames(scenario_egfr_pivot)),
+  pivot_longer(-Model, names_to = "Fold", values_to = "Test_MSE") %>%
+  mutate(Fold  = factor(Fold,  levels = LOO_LABELS),
+         Model = factor(Model, levels = rownames(loo_egfr)),
          MSE_rank = rank(Test_MSE))
 
-ggplot(melt_data, aes(x = Scenario, y = Model, fill = MSE_rank)) +
+ggplot(melt_egfr, aes(x = Fold, y = Model, fill = MSE_rank)) +
   geom_tile(color = "white", linewidth = 0.5) +
-  geom_text(aes(label = round(Test_MSE, 0)), size = 4) +
+  geom_text(aes(label = round(Test_MSE, 0)), size = 4.5, fontface = "bold") +
   scale_fill_viridis_c(option = "viridis", direction = -1, guide = "none") +
-  labs(title = "eGFR Test MSE by Model and Scenario",
-       subtitle = "(Lower/Lighter = Better, colors by rank)",
-       x = "Scenario", y = "Model") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
+  labs(title = "LOO ComBat — eGFR Test MSE by Model and Fold",
+       subtitle = "Lower / Lighter = Better   |   Colors by rank across all cells",
+       x = "Held-Out Test Cohort", y = "Model") +
+  theme(axis.text.x  = element_text(angle = 20, hjust = 1),
+        plot.title    = element_text(face = "bold", size = 14),
+        plot.subtitle = element_text(size = 11))
 ```
 
 ---
 
-# Scenario Heatmap - DGF
+# LOO Heatmap — DGF Test AUC
 
-```{r scenario_heatmap_dgf, fig.width=10, fig.height=6}
-melt_data <- scenario_dgf_pivot %>%
+```{r loo_heatmap_dgf, fig.width=9, fig.height=5}
+melt_dgf <- loo_dgf %>%
   rownames_to_column("Model") %>%
-  pivot_longer(-Model, names_to = "Scenario", values_to = "Test_AUC") %>%
-  mutate(Scenario = factor(Scenario, levels = colnames(scenario_dgf_pivot)))
+  pivot_longer(-Model, names_to = "Fold", values_to = "Test_AUC") %>%
+  mutate(Fold  = factor(Fold,  levels = LOO_LABELS),
+         Model = factor(Model, levels = rownames(loo_dgf)))
 
-ggplot(melt_data, aes(x = Scenario, y = Model, fill = Test_AUC)) +
+ggplot(melt_dgf, aes(x = Fold, y = Model, fill = Test_AUC)) +
   geom_tile(color = "white", linewidth = 0.5) +
-  geom_text(aes(label = sprintf("%.3f", Test_AUC)), size = 4) +
+  geom_text(aes(label = sprintf("%.3f", Test_AUC)), size = 4.5, fontface = "bold") +
   scale_fill_viridis_c(option = "viridis", direction = 1, guide = "none") +
-  labs(title = "DGF Test AUC by Model and Scenario",
-       subtitle = "(Higher = Better)",
-       x = "Scenario", y = "Model", fill = "Test AUC") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
+  labs(title = "LOO ComBat — DGF Test AUC by Model and Fold",
+       subtitle = "Higher / Lighter = Better",
+       x = "Held-Out Test Cohort", y = "Model") +
+  theme(axis.text.x  = element_text(angle = 20, hjust = 1),
+        plot.title    = element_text(face = "bold", size = 14),
+        plot.subtitle = element_text(size = 11))
 ```
 
 ---
 
-# Method Heatmap - eGFR
+# LOO Average Performance Across Folds
 
-```{r method_heatmap_egfr, fig.width=12, fig.height=6}
-melt_data <- method_egfr_pivot %>%
-  rownames_to_column("Model") %>%
-  filter(Model != "Ridge", Model != "Lasso") %>%
-  pivot_longer(-Model, names_to = "Method", values_to = "Test_MSE") %>%
-  mutate(Method = factor(Method, levels = colnames(method_egfr_pivot)),
-         MSE_rank = rank(Test_MSE))
+```{r loo_avg_performance, fig.width=14, fig.height=6}
+egfr_avg <- data.frame(
+  Model = rownames(loo_egfr),
+  avg   = rowMeans(loo_egfr)
+) %>% mutate(Model = factor(Model, levels = Model),
+             is_best = avg == min(avg))
 
-ggplot(melt_data, aes(x = Method, y = Model, fill = MSE_rank)) +
-  geom_tile(color = "white", linewidth = 0.5) +
-  geom_text(aes(label = round(Test_MSE, 0)), size = 4) +
-  scale_fill_viridis_c(option = "viridis", direction = -1, guide = "none") +
-  labs(title = "eGFR Test MSE by Model and Harmonization Method",
-       subtitle = "(Lower = Better, colors by rank)",
-       x = "Harmonization Method", y = "Model") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
-```
+dgf_avg <- data.frame(
+  Model = rownames(loo_dgf),
+  avg   = rowMeans(loo_dgf)
+) %>% mutate(Model = factor(Model, levels = Model),
+             is_best = avg == max(avg))
 
----
-
-# Method Heatmap - DGF
-
-```{r method_heatmap_dgf, fig.width=12, fig.height=6}
-melt_data <- method_dgf_pivot %>%
-  rownames_to_column("Model") %>%
-  pivot_longer(-Model, names_to = "Method", values_to = "Test_AUC") %>%
-  mutate(Method = factor(Method, levels = colnames(method_dgf_pivot)))
-
-ggplot(melt_data, aes(x = Method, y = Model, fill = Test_AUC)) +
-  geom_tile(color = "white", linewidth = 0.5) +
-  geom_text(aes(label = sprintf("%.3f", Test_AUC)), size = 4) +
-  scale_fill_viridis_c(option = "viridis", direction = 1) +
-  labs(title = "DGF Test AUC by Model and Harmonization Method",
-       subtitle = "(Higher = Better)",
-       x = "Harmonization Method", y = "Model", fill = "Test AUC") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
-```
-
----
-
-# Average Performance by Scenario
-
-```{r avg_performance_scenario, fig.width=14, fig.height=6}
-scenario_egfr_avg <- colMeans(scenario_egfr_pivot, na.rm = TRUE)
-scenario_dgf_avg <- colMeans(scenario_dgf_pivot, na.rm = TRUE)
-
-egfr_df <- data.frame(
-  Scenario = factor(names(scenario_egfr_avg), levels = names(scenario_egfr_avg)),
-  avg = scenario_egfr_avg
-) %>% mutate(is_best = avg == min(avg))
-
-dgf_df <- data.frame(
-  Scenario = factor(names(scenario_dgf_avg), levels = names(scenario_dgf_avg)),
-  avg = scenario_dgf_avg
-) %>% mutate(is_best = avg == max(avg))
-
-p1 <- ggplot(egfr_df, aes(x = Scenario, y = avg, fill = is_best)) +
+p1 <- ggplot(egfr_avg, aes(x = Model, y = avg, fill = is_best)) +
   geom_col(color = "black", linewidth = 0.5) +
-  geom_text(aes(label = round(avg, 0)), vjust = -0.5, fontface = "bold") +
+  geom_text(aes(label = round(avg, 0)), vjust = -0.5, fontface = "bold", size = 4) +
   scale_fill_manual(values = c("FALSE" = "#3498db", "TRUE" = "#2ecc71"), guide = "none") +
   scale_y_sqrt() +
-  labs(title = "eGFR: Average Test MSE by Scenario",
-       subtitle = "(Lower = Better, sqrt scale)",
-       x = "Scenario", y = "Average Test MSE (sqrt scale)") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
-
-p2 <- ggplot(dgf_df, aes(x = Scenario, y = avg, fill = is_best)) +
-  geom_col(color = "black", linewidth = 0.5) +
-  geom_text(aes(label = sprintf("%.3f", avg)), vjust = -0.5, fontface = "bold") +
-  scale_fill_manual(values = c("FALSE" = "#3498db", "TRUE" = "#2ecc71"), guide = "none") +
-  scale_y_continuous(limits = c(0, 1)) +
-  labs(title = "DGF: Average Test AUC by Scenario",
-       subtitle = "(Higher = Better)",
-       x = "Scenario", y = "Average Test AUC") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
-
-grid.arrange(p1, p2, ncol = 2)
-```
-
----
-
-# Average Performance by Method
-
-```{r avg_performance_method, fig.width=14, fig.height=6}
-method_egfr_avg <- colMeans(method_egfr_pivot, na.rm = TRUE)
-method_dgf_avg <- colMeans(method_dgf_pivot, na.rm = TRUE)
-
-egfr_df <- data.frame(
-  Method = factor(names(method_egfr_avg), levels = names(method_egfr_avg)),
-  avg = method_egfr_avg
-) %>% mutate(is_best = avg == min(avg))
-
-dgf_df <- data.frame(
-  Method = factor(names(method_dgf_avg), levels = names(method_dgf_avg)),
-  avg = method_dgf_avg
-) %>% mutate(is_best = avg == max(avg))
-
-unharm_mse <- method_egfr_avg["Unharmonized"]
-unharm_auc <- method_dgf_avg["Unharmonized"]
-
-p1 <- ggplot(egfr_df, aes(x = Method, y = avg, fill = is_best)) +
-  geom_col(color = "black", linewidth = 0.5) +
-  geom_text(aes(label = round(avg, 0)), vjust = -0.5, fontface = "bold") +
-  geom_hline(yintercept = unharm_mse, color = "red", linetype = "dashed", linewidth = 1) +
-  scale_fill_manual(values = c("FALSE" = "#3498db", "TRUE" = "#2ecc71"), guide = "none") +
-  labs(title = "eGFR: Average Test MSE by Method",
-       subtitle = "(Lower = Better)",
-       x = "Harmonization Method", y = "Average Test MSE") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
-
-p2 <- ggplot(dgf_df, aes(x = Method, y = avg, fill = is_best)) +
-  geom_col(color = "black", linewidth = 0.5) +
-  geom_text(aes(label = sprintf("%.3f", avg)), vjust = -0.5, fontface = "bold") +
-  geom_hline(yintercept = unharm_auc, color = "red", linetype = "dashed", linewidth = 1) +
-  scale_fill_manual(values = c("FALSE" = "#3498db", "TRUE" = "#2ecc71"), guide = "none") +
-  scale_y_continuous(limits = c(0, 1)) +
-  labs(title = "DGF: Average Test AUC by Method",
-       subtitle = "(Higher = Better)",
-       x = "Harmonization Method", y = "Average Test AUC") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
-
-grid.arrange(p1, p2, ncol = 2)
-```
-
----
-
-# Improvement Over Unharmonized
-
-```{r improvement_over_unharmonized, fig.width=14, fig.height=6}
-method_egfr_avg <- colMeans(method_egfr_pivot, na.rm = TRUE)
-method_dgf_avg <- colMeans(method_dgf_pivot, na.rm = TRUE)
-
-unharm_mse <- method_egfr_avg["Unharmonized"]
-unharm_auc <- method_dgf_avg["Unharmonized"]
-
-egfr_improve <- data.frame(
-  Method = names(method_egfr_avg),
-  avg = method_egfr_avg
-) %>%
-  filter(Method != "Unharmonized") %>%
-  mutate(
-    Method = factor(Method, levels = Method),
-    improvement = ((unharm_mse - avg) / unharm_mse) * 100
-  )
-
-dgf_improve <- data.frame(
-  Method = names(method_dgf_avg),
-  avg = method_dgf_avg
-) %>%
-  filter(Method != "Unharmonized") %>%
-  mutate(
-    Method = factor(Method, levels = Method),
-    improvement = ((avg - unharm_auc) / unharm_auc) * 100
-  )
-
-p1 <- ggplot(egfr_improve, aes(x = Method, y = improvement, fill = improvement > 0)) +
-  geom_col(color = "black", linewidth = 0.5) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 1) +
-  geom_text(aes(label = sprintf("%+.1f%%", improvement)),
-            vjust = ifelse(egfr_improve$improvement >= 0, -0.5, 1.5), fontface = "bold") +
-  scale_fill_manual(values = c("FALSE" = "#e74c3c", "TRUE" = "#2ecc71"), guide = "none") +
-  labs(title = "eGFR: % Improvement Over Unharmonized",
-       subtitle = "(Positive = Better)",
-       x = "Harmonization Method", y = "% Improvement in Test MSE") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
-
-p2 <- ggplot(dgf_improve, aes(x = Method, y = improvement, fill = improvement > 0)) +
-  geom_col(color = "black", linewidth = 0.5) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 1) +
-  geom_text(aes(label = sprintf("%+.1f%%", improvement)),
-            vjust = ifelse(dgf_improve$improvement >= 0, -0.5, 1.5), fontface = "bold") +
-  scale_fill_manual(values = c("FALSE" = "#e74c3c", "TRUE" = "#2ecc71"), guide = "none") +
-  labs(title = "DGF: % Improvement Over Unharmonized",
-       subtitle = "(Positive = Better)",
-       x = "Harmonization Method", y = "% Improvement in Test AUC") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", size = 14))
-
-grid.arrange(p1, p2, ncol = 2)
-```
-
----
-
-# Improvement by Model
-
-```{r improvement_by_model, fig.width=14, fig.height=10}
-methods_to_compare <- colnames(egfr_improve_by_model)
-
-egfr_improve_long <- egfr_improve_by_model %>%
-  rownames_to_column("Model") %>%
-  pivot_longer(-Model, names_to = "Method", values_to = "Improvement") %>%
-  mutate(Method = factor(Method, levels = methods_to_compare))
-
-dgf_improve_long <- dgf_improve_by_model %>%
-  rownames_to_column("Model") %>%
-  pivot_longer(-Model, names_to = "Method", values_to = "Improvement") %>%
-  mutate(Method = factor(Method, levels = methods_to_compare))
-
-method_colors <- c('#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#e74c3c')
-
-p1 <- ggplot(egfr_improve_long, aes(x = Model, y = Improvement, fill = Method)) +
-  geom_col(position = position_dodge(width = 0.8), color = "black", linewidth = 0.3, width = 0.7) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 1) +
-  scale_fill_manual(values = setNames(method_colors[1:length(methods_to_compare)], methods_to_compare)) +
-  labs(title = "eGFR: % Improvement Over Unharmonized by Model",
-       subtitle = "(Positive = Better)",
-       x = "Model", y = "% Improvement in Test MSE", fill = "Method") +
+  labs(title = "eGFR: Average Test MSE Across LOO Folds",
+       subtitle = "Lower = Better  |  sqrt scale  |  Green = best",
+       x = "Model", y = "Average Test MSE (sqrt scale)") +
   theme(plot.title = element_text(face = "bold", size = 14))
 
-p2 <- ggplot(dgf_improve_long, aes(x = Model, y = Improvement, fill = Method)) +
-  geom_col(position = position_dodge(width = 0.8), color = "black", linewidth = 0.3, width = 0.7) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 1) +
-  scale_fill_manual(values = setNames(method_colors[1:length(methods_to_compare)], methods_to_compare)) +
-  labs(title = "DGF: % Improvement Over Unharmonized by Model",
-       subtitle = "(Positive = Better)",
-       x = "Model", y = "% Improvement in Test AUC", fill = "Method") +
+p2 <- ggplot(dgf_avg, aes(x = Model, y = avg, fill = is_best)) +
+  geom_col(color = "black", linewidth = 0.5) +
+  geom_text(aes(label = sprintf("%.3f", avg)), vjust = -0.5, fontface = "bold", size = 4) +
+  scale_fill_manual(values = c("FALSE" = "#3498db", "TRUE" = "#2ecc71"), guide = "none") +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(title = "DGF: Average Test AUC Across LOO Folds",
+       subtitle = "Higher = Better  |  Green = best",
+       x = "Model", y = "Average Test AUC") +
   theme(plot.title = element_text(face = "bold", size = 14))
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+---
+
+# LOO Fold Comparison — Per Model
+
+```{r loo_fold_comparison, fig.width=14, fig.height=10}
+fold_colors <- c("#2ecc71", "#3498db", "#9b59b6")
+
+egfr_long <- loo_egfr %>%
+  rownames_to_column("Model") %>%
+  pivot_longer(-Model, names_to = "Fold", values_to = "Test_MSE") %>%
+  mutate(Fold = factor(Fold, levels = LOO_LABELS))
+
+dgf_long <- loo_dgf %>%
+  rownames_to_column("Model") %>%
+  pivot_longer(-Model, names_to = "Fold", values_to = "Test_AUC") %>%
+  mutate(Fold = factor(Fold, levels = LOO_LABELS))
+
+p1 <- ggplot(egfr_long, aes(x = Model, y = Test_MSE, fill = Fold)) +
+  geom_col(position = position_dodge(width = 0.8),
+           color = "black", linewidth = 0.3, width = 0.7) +
+  scale_fill_manual(values = setNames(fold_colors, LOO_LABELS)) +
+  labs(title = "eGFR Test MSE per LOO Fold",
+       subtitle = "Lower = Better  |  Each bar = one held-out cohort",
+       x = "Model", y = "Test MSE", fill = "Held-Out Cohort") +
+  theme(plot.title = element_text(face = "bold", size = 14),
+        legend.position = "top")
+
+p2 <- ggplot(dgf_long, aes(x = Model, y = Test_AUC, fill = Fold)) +
+  geom_col(position = position_dodge(width = 0.8),
+           color = "black", linewidth = 0.3, width = 0.7) +
+  scale_fill_manual(values = setNames(fold_colors, LOO_LABELS)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(title = "DGF Test AUC per LOO Fold",
+       subtitle = "Higher = Better  |  Each bar = one held-out cohort",
+       x = "Model", y = "Test AUC", fill = "Held-Out Cohort") +
+  theme(plot.title = element_text(face = "bold", size = 14),
+        legend.position = "top")
 
 grid.arrange(p1, p2, nrow = 2)
 ```
@@ -319,27 +173,28 @@ ckd_long <- ckd_distribution %>%
   pivot_longer(-CKD_Stage, names_to = "Category", values_to = "Count") %>%
   mutate(
     CKD_Stage = factor(CKD_Stage, levels = ckd_distribution$CKD_Stage),
-    Set = ifelse(grepl("Train", Category), "Training", "Test"),
+    Set  = ifelse(grepl("Train", Category), "Training", "Test"),
     Type = ifelse(grepl("Actual", Category), "Actual", "Predicted")
   )
 
-train_data <- ckd_long %>% filter(Set == "Training")
-test_data <- ckd_long %>% filter(Set == "Test")
-
-p1 <- ggplot(train_data, aes(x = CKD_Stage, y = Count, fill = Type)) +
-  geom_col(position = position_dodge(width = 0.8), color = "black", linewidth = 0.3, width = 0.7) +
+p1 <- ggplot(ckd_long %>% filter(Set == "Training"),
+             aes(x = CKD_Stage, y = Count, fill = Type)) +
+  geom_col(position = position_dodge(width = 0.8),
+           color = "black", linewidth = 0.3, width = 0.7) +
   scale_fill_manual(values = c("Actual" = "#3498db", "Predicted" = "#e74c3c")) +
   labs(title = "Training Set: CKD Stage Distribution",
-       subtitle = "(XGBoost on ComBat Harmonized Data)",
+       subtitle = "XGBoost — LOO ComBat (Coimbra + Mayo → UC Davis)",
        x = "CKD Stage", y = "Count", fill = "") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(face = "bold", size = 14))
 
-p2 <- ggplot(test_data, aes(x = CKD_Stage, y = Count, fill = Type)) +
-  geom_col(position = position_dodge(width = 0.8), color = "black", linewidth = 0.3, width = 0.7) +
+p2 <- ggplot(ckd_long %>% filter(Set == "Test"),
+             aes(x = CKD_Stage, y = Count, fill = Type)) +
+  geom_col(position = position_dodge(width = 0.8),
+           color = "black", linewidth = 0.3, width = 0.7) +
   scale_fill_manual(values = c("Actual" = "#3498db", "Predicted" = "#e74c3c")) +
   labs(title = "Test Set: CKD Stage Distribution",
-       subtitle = "(XGBoost on ComBat Harmonized Data)",
+       subtitle = "XGBoost — LOO ComBat (Coimbra + Mayo → UC Davis)",
        x = "CKD Stage", y = "Count", fill = "") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(face = "bold", size = 14))
@@ -365,7 +220,7 @@ dgf_imp <- dgf_importance %>%
 p1 <- ggplot(egfr_imp, aes(x = Importance, y = Feature)) +
   geom_col(fill = "#3498db", color = "black", linewidth = 0.3) +
   labs(title = sprintf("eGFR: Top %d Features", top_n),
-       subtitle = "(Permutation Importance, XGBoost)",
+       subtitle = "Permutation Importance — XGBoost on LOO ComBat (CM → U)",
        x = "Importance (L1 Normalized)", y = "") +
   theme(plot.title = element_text(face = "bold", size = 14),
         axis.text.y = element_text(size = 9))
@@ -373,7 +228,7 @@ p1 <- ggplot(egfr_imp, aes(x = Importance, y = Feature)) +
 p2 <- ggplot(dgf_imp, aes(x = Importance, y = Feature)) +
   geom_col(fill = "#e74c3c", color = "black", linewidth = 0.3) +
   labs(title = sprintf("DGF: Top %d Features", top_n),
-       subtitle = "(Permutation Importance, XGBoost)",
+       subtitle = "Permutation Importance — XGBoost on LOO ComBat (CM → U)",
        x = "Importance (L1 Normalized)", y = "") +
   theme(plot.title = element_text(face = "bold", size = 14),
         axis.text.y = element_text(size = 9))

@@ -229,11 +229,11 @@ try:
     from sklearn.preprocessing import StandardScaler
     from sklearn.inspection import permutation_importance
 
-    # Load ComBat harmonized training and test data (best performing)
-    train_data = pd.read_csv('data/harmonized_combined/harmonized_train.csv')
-    test_data = pd.read_csv('data/harmonized_combined/harmonized_test.csv')
-    print(f"Loaded training data: {train_data.shape}")
-    print(f"Loaded test data: {test_data.shape}")
+    # Use LOO ComBat fold: Coimbra + Mayo → UC Davis (largest test set: 320 subjects)
+    train_data = pd.read_csv('data/loo_combat/CM_to_U/train_harmonized.csv')
+    test_data  = pd.read_csv('data/loo_combat/CM_to_U/test_harmonized.csv')
+    print(f"Loaded LOO CM→U training data: {train_data.shape}")
+    print(f"Loaded LOO CM→U test data: {test_data.shape}")
 
     # Prepare features (exclude ID and outcomes)
     exclude_cols = ['Subject_ID', 'eGFR_12M', 'DGF', 'Site']

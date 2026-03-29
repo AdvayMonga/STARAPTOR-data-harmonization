@@ -57,7 +57,7 @@ batch_diagnostics <- visual_prep(
   covariates = covariates
 )
 
-comfam_shiny(batch_diagnostics)
+# comfam_shiny(batch_diagnostics)
 ```
 
 # ComBat Harmonization
@@ -120,7 +120,7 @@ post_diagnostics <- visual_prep(
   covariates = covariates
 )
 
-comfam_shiny(post_diagnostics)
+# comfam_shiny(post_diagnostics)
 ```
 
 # CovBat Harmonization
@@ -188,7 +188,7 @@ covbat_post_diagnostics <- visual_prep(
   covariates = covariates
 )
 
-comfam_shiny(covbat_post_diagnostics)
+# comfam_shiny(covbat_post_diagnostics)
 ```
 
 # ─────────────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ comfam_shiny(covbat_post_diagnostics)
 #   UM → C : train on UC Davis + Mayo,     test on Coimbra
 #   CM → U : train on Coimbra  + Mayo,     test on UC Davis
 
-# Load Mayo data (not loaded earlier in this file)
+# Load Mayo data
 ```{r}
 df_m <- read.csv("data/m_image_features.csv")
 
@@ -232,7 +232,7 @@ run_loo_combat <- function(train_list, train_labels, df_test, test_label,
   cat("  Training subjects:", nrow(df_train_combined),
       "(", paste(train_labels, collapse = "+"), ")\n")
 
-  # --- Step 2: Fit ComBat on training cohorts ---
+  # --- Step 1: Fit ComBat ONLY on training cohorts ---
   combat_fit <- combat_harm(
     df         = df_train_combined,
     features   = feature_cols,
@@ -242,32 +242,21 @@ run_loo_combat <- function(train_list, train_labels, df_test, test_label,
     eb         = TRUE,
     quiet      = TRUE
   )
-
   harmonized_train <- combat_fit$harmonized_df
-  cat("  ComBat fit complete.\n")
+  cat("  ComBat fit on training cohorts complete.\n")
 
-  # --- Step 4: Apply learned parameters to test cohort (no refitting) ---
-  df_test_prep        <- df_test[, c("Subject_ID", feature_cols, covariates)]
-  df_test_prep$batch  <- test_label
+  # --- Step 2: Apply learned parameters to held-out test cohort (no refitting) ---
+  df_test_prep       <- df_test[, c("Subject_ID", feature_cols, covariates)]
+  df_test_prep$batch <- test_label
 
-  # predict() uses the fitted ComBat model to estimate and remove the test
-  # cohort's batch effect — the model is not re-fitted on the test data
-  harmonized_test_features <- predict(
-    combat_fit$ComBat.model,
-    newdata = df_test_prep,
-    batch   = "batch"
-  )
-
-  # Reassemble with metadata
-  harmonized_test <- df_test_prep
-  harmonized_test[, feature_cols] <- harmonized_test_features[, feature_cols]
-
-  cat("  Test cohort harmonized:", nrow(harmonized_test), "subjects (", test_label, ")\n")
+  test_result     <- combat_harm(df = df_test_prep, predict = TRUE,
+                                 object = combat_fit$combat.object)
+  harmonized_test <- test_result$harmonized_df
+  cat("  Test cohort harmonized via predict():", nrow(harmonized_test), "subjects.\n")
 
   # --- Save ---
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-  # Drop batch column before saving (Python pipeline doesn't need it)
   train_out <- harmonized_train[, !(names(harmonized_train) %in% "batch")]
   test_out  <- harmonized_test[,  !(names(harmonized_test)  %in% "batch")]
 
