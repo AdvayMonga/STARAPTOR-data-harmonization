@@ -18,17 +18,17 @@ SCENARIOS = {
     'Pooled ComBat': 'harmonized',
     'Pooled CovBat': 'covbat',
     # LOO Strategy 1: Unharmonized baseline (raw train, raw test)
-    'LOO Raw: UC → M': 'UC_to_M_raw',
-    'LOO Raw: UM → C': 'UM_to_C_raw',
-    'LOO Raw: CM → U': 'CM_to_U_raw',
+    'LOO Raw: UC → M': 'loo_UC_to_M_raw',
+    'LOO Raw: UM → C': 'loo_UM_to_C_raw',
+    'LOO Raw: CM → U': 'loo_CM_to_U_raw',
     # LOO Strategy 2: ComBat (harmonized train, harmonized test)
-    'LOO ComBat: UC → M': 'UC_to_M',
-    'LOO ComBat: UM → C': 'UM_to_C',
-    'LOO ComBat: CM → U': 'CM_to_U',
+    'LOO ComBat: UC → M': 'loo_UC_to_M',
+    'LOO ComBat: UM → C': 'loo_UM_to_C',
+    'LOO ComBat: CM → U': 'loo_CM_to_U',
     # LOO Strategy 3: Harm train / raw test (deployment simulation)
-    'LOO Harm→Raw: UC → M': 'UC_to_M_harm_train',
-    'LOO Harm→Raw: UM → C': 'UM_to_C_harm_train',
-    'LOO Harm→Raw: CM → U': 'CM_to_U_harm_train',
+    'LOO Harm→Raw: UC → M': 'loo_UC_to_M_harm_train',
+    'LOO Harm→Raw: UM → C': 'loo_UM_to_C_harm_train',
+    'LOO Harm→Raw: CM → U': 'loo_CM_to_U_harm_train',
 }
 
 # METHODS: All harmonization methods for pooled cohort comparison

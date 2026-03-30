@@ -359,8 +359,8 @@ for key, label in LOO_SPLITS:
     run_train_test(
         f'data/loo_combat/{key}/train_raw.csv',
         f'data/loo_combat/{key}/test_raw.csv',
-        f'results/tables/egfr_results_{key}_raw.csv',
-        f'results/tables/dgf_results_{key}_raw.csv',
+        f'results/tables/egfr_results_loo_{key}_raw.csv',
+        f'results/tables/dgf_results_loo_{key}_raw.csv',
         print_summary=True
     )
 
@@ -383,8 +383,8 @@ for key, label in LOO_SPLITS:
     run_train_test(
         train_path,
         test_path,
-        f'results/tables/egfr_results_{key}.csv',
-        f'results/tables/dgf_results_{key}.csv',
+        f'results/tables/egfr_results_loo_{key}.csv',
+        f'results/tables/dgf_results_loo_{key}.csv',
         print_summary=True
     )
 
@@ -413,7 +413,7 @@ for key, label in LOO_SPLITS:
     run_train_test(
         train_path,
         test_rnamed_path,
-        f'results/tables/egfr_results_{key}_harm_train.csv',
-        f'results/tables/dgf_results_{key}_harm_train.csv',
+        f'results/tables/egfr_results_loo_{key}_harm_train.csv',
+        f'results/tables/dgf_results_loo_{key}_harm_train.csv',
         print_summary=True
     )

@@ -264,6 +264,12 @@ if raw_egfr is not None and harmtrain_egfr is not None:
                      fontsize=13, fontweight='bold')
         ax.legend(title='Strategy', fontsize=10)
         ax.grid(axis='y', alpha=0.3)
+        
+        # Apply log scale only to eGFR MSE plot
+        if metric == 'eGFR Test MSE':
+            ax.set_yscale('log')
+            ax.set_ylabel(f'Avg {metric} (log scale, across models)', fontsize=11, fontweight='bold')
+        
         if ylim:
             ax.set_ylim(ylim)
 
