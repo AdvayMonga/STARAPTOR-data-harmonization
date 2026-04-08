@@ -143,26 +143,30 @@ bar_w = 0.25
 
 fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 
-for ax, avgs, metric, better, fmt, ylim in [
-    (axes[0], strat_avgs_egfr, 'eGFR Test MSE', 'Lower', '.0f', None),
-    (axes[1], strat_avgs_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05)),
+for ax, avgs, metric, better, fmt, ylim, use_log in [
+    (axes[0], strat_avgs_egfr, 'eGFR Test MSE', 'Lower', '.0f', None,        True),
+    (axes[1], strat_avgs_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05), False),
 ]:
     i = 0
     for name, series in avgs.items():
         if series is None:
             continue
-        bars = ax.bar(x + i * bar_w, series.values, bar_w,
+        plot_vals = np.log10(series.values) if use_log else series.values
+        bars = ax.bar(x + i * bar_w, plot_vals, bar_w,
                       label=name, color=strat_colors[name],
                       edgecolor='black', linewidth=0.5)
-        for bar, val in zip(bars, series.values):
-            ax.annotate(f'{val:{fmt}}',
-                        xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+        for bar, raw, pv in zip(bars, series.values, plot_vals):
+            ax.annotate(f'{raw:{fmt}}',
+                        xy=(bar.get_x() + bar.get_width() / 2, pv),
                         xytext=(0, 4), textcoords='offset points',
                         ha='center', fontsize=8, fontweight='bold')
         i += 1
     ax.set_xticks(x + bar_w)
     ax.set_xticklabels(models, rotation=20, ha='right', fontsize=10)
-    ax.set_ylabel(f'Avg {metric} (across folds)', fontsize=11, fontweight='bold')
+    if use_log:
+        ax.set_ylabel(f'Avg {metric} (log10)', fontsize=11, fontweight='bold')
+    else:
+        ax.set_ylabel(f'Avg {metric} (across folds)', fontsize=11, fontweight='bold')
     ax.set_title(f'{metric}: Strategy Comparison per Model\n({better} = Better  |  avg across 3 folds)',
                  fontsize=12, fontweight='bold')
     ax.legend(title='Strategy', fontsize=10)
@@ -187,17 +191,21 @@ width = 0.25
 
 fig, axes = plt.subplots(2, 1, figsize=(13, 10))
 
-for ax, pivot, metric, better, fmt, ylim in [
-    (axes[0], combat_egfr, 'eGFR Test MSE', 'Lower', '.0f', None),
-    (axes[1], combat_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05)),
+for ax, pivot, metric, better, fmt, ylim, use_log in [
+    (axes[0], combat_egfr, 'eGFR Test MSE', 'Lower', '.0f', None,        True),
+    (axes[1], combat_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05), False),
 ]:
     for i, fold in enumerate(pivot.columns):
-        ax.bar(x + i * width, pivot[fold].values, width,
+        vals = np.log10(pivot[fold].values) if use_log else pivot[fold].values
+        ax.bar(x + i * width, vals, width,
                label=fold, color=fold_colors[i], edgecolor='black', linewidth=0.5)
 
     ax.set_xticks(x + width)
     ax.set_xticklabels(models, rotation=25, ha='right', fontsize=10)
-    ax.set_ylabel(metric, fontsize=11, fontweight='bold')
+    if use_log:
+        ax.set_ylabel(f'{metric} (log10)', fontsize=11, fontweight='bold')
+    else:
+        ax.set_ylabel(metric, fontsize=11, fontweight='bold')
     ax.set_title(f'LOO ComBat — {metric} per Fold\n({better} = Better)',
                  fontsize=13, fontweight='bold')
     ax.legend(title='Held-Out Cohort', fontsize=10)
@@ -234,14 +242,11 @@ if raw_egfr is not None and harmtrain_egfr is not None:
         ('Harm→Raw',     harmtrain_dgf, '#f39c12'),
     ]
 
-    for ax, strat_data, metric, better, fmt, ylim in [
-        (axes[0], strategy_data_egfr, 'eGFR Test MSE', 'Lower', '.0f', None),
-        (axes[1], strategy_data_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05)),
+    for ax, strat_data, metric, better, fmt, ylim, use_log in [
+        (axes[0], strategy_data_egfr, 'eGFR Test MSE', 'Lower', '.0f', None,        True),
+        (axes[1], strategy_data_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05), False),
     ]:
-        n_strats = len(strat_data)
         n_folds  = len(fold_labels)
-        # group by fold: within each fold show n_strats bars per model averaged across models
-        # instead show bars grouped by fold for avg across models
         fold_x = np.arange(n_folds)
         bar_w  = 0.25
 
@@ -249,27 +254,25 @@ if raw_egfr is not None and harmtrain_egfr is not None:
             if df is None:
                 continue
             avgs = df.mean(axis=0).values  # avg across models per fold
-            bars = ax.bar(fold_x + i * bar_w, avgs, bar_w,
+            plot_vals = np.log10(avgs) if use_log else avgs
+            bars = ax.bar(fold_x + i * bar_w, plot_vals, bar_w,
                           label=name, color=color, edgecolor='black', linewidth=0.5)
-            for bar, val in zip(bars, avgs):
-                ax.annotate(f'{val:{fmt}}',
-                            xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+            for bar, raw, pv in zip(bars, avgs, plot_vals):
+                ax.annotate(f'{raw:{fmt}}',
+                            xy=(bar.get_x() + bar.get_width() / 2, pv),
                             xytext=(0, 4), textcoords='offset points',
                             ha='center', fontsize=8, fontweight='bold')
 
         ax.set_xticks(fold_x + bar_w)
         ax.set_xticklabels(fold_labels, fontsize=10)
-        ax.set_ylabel(f'Avg {metric} (across models)', fontsize=11, fontweight='bold')
+        if use_log:
+            ax.set_ylabel(f'Avg {metric} (log10)', fontsize=11, fontweight='bold')
+        else:
+            ax.set_ylabel(f'Avg {metric} (across models)', fontsize=11, fontweight='bold')
         ax.set_title(f'{metric}: Unharmonized vs LOO ComBat vs Harm→Raw\n({better} = Better)',
                      fontsize=13, fontweight='bold')
         ax.legend(title='Strategy', fontsize=10)
         ax.grid(axis='y', alpha=0.3)
-        
-        # Apply log scale only to eGFR MSE plot
-        if metric == 'eGFR Test MSE':
-            ax.set_yscale('log')
-            ax.set_ylabel(f'Avg {metric} (log scale, across models)', fontsize=11, fontweight='bold')
-        
         if ylim:
             ax.set_ylim(ylim)
 
@@ -280,7 +283,104 @@ if raw_egfr is not None and harmtrain_egfr is not None:
 else:
     print("⚠ Raw/Harm→Raw results not found — run 03_train_models.py first")
 
-# ── 5. CKD Stage Distribution ────────────────────────────────
+# ── 5. % Improvement Over Baselines ──────────────────────────
+print("\n" + "=" * 60)
+print("GENERATING IMPROVEMENT VS BASELINES")
+print("=" * 60)
+
+if raw_egfr is not None and harmtrain_egfr is not None:
+    # eGFR: (baseline - combat) / baseline * 100  (lower MSE = better → positive = ComBat wins)
+    # DGF:  (combat - baseline) / |baseline| * 100 (higher AUC = better → positive = ComBat wins)
+    def pct_improve_egfr(baseline_df):
+        return ((baseline_df - combat_egfr) / baseline_df * 100).mean(axis=0)
+
+    def pct_improve_dgf(baseline_df):
+        return ((combat_dgf - baseline_df) / baseline_df.abs() * 100).mean(axis=0)
+
+    impr_data = [
+        ('vs Unharmonized', pct_improve_egfr(raw_egfr),       pct_improve_dgf(raw_dgf),       '#e74c3c'),
+        ('vs Harm→Raw',     pct_improve_egfr(harmtrain_egfr), pct_improve_dgf(harmtrain_dgf), '#f39c12'),
+    ]
+
+    fig, axes = plt.subplots(2, 1, figsize=(13, 10))
+
+    for ax, metric, getter_idx, better in [
+        (axes[0], 'eGFR % MSE Reduction vs Baseline', 0, 'Positive = ComBat has lower MSE'),
+        (axes[1], 'DGF % AUC Gain vs Baseline',       1, 'Positive = ComBat has higher AUC'),
+    ]:
+        n = len(impr_data)
+        fold_x = np.arange(len(fold_labels))
+        bar_w = 0.35
+
+        for i, (label, egfr_vals, dgf_vals, color) in enumerate(impr_data):
+            vals = egfr_vals.values if getter_idx == 0 else dgf_vals.values
+            bars = ax.bar(fold_x + i * bar_w, vals, bar_w,
+                          label=label, color=color, edgecolor='black', linewidth=0.5)
+            for bar, val in zip(bars, vals):
+                ax.annotate(f'{val:+.1f}%',
+                            xy=(bar.get_x() + bar.get_width() / 2,
+                                bar.get_height() if val >= 0 else 0),
+                            xytext=(0, 4 if val >= 0 else -14),
+                            textcoords='offset points',
+                            ha='center', fontsize=9, fontweight='bold')
+
+        ax.axhline(0, color='black', linewidth=1.0)
+        ax.set_xticks(fold_x + bar_w / 2)
+        ax.set_xticklabels(fold_labels, fontsize=10)
+        ax.set_ylabel('% Improvement', fontsize=11, fontweight='bold')
+        ax.set_title(f'{metric}\n({better}  |  averaged across models per fold)',
+                     fontsize=12, fontweight='bold')
+        ax.legend(title='Baseline', fontsize=10)
+        ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig('results/figures/loo_improvement_vs_baselines.png', bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: loo_improvement_vs_baselines.png")
+else:
+    print("⚠ Baseline results not found — skipping improvement chart")
+
+# ── 6. Per-Model Improvement Heatmap ─────────────────────────
+print("\n" + "=" * 60)
+print("GENERATING PER-MODEL IMPROVEMENT HEATMAP")
+print("=" * 60)
+
+if raw_egfr is not None:
+    egfr_impr = (raw_egfr - combat_egfr) / raw_egfr * 100
+    dgf_impr  = (combat_dgf - raw_dgf)   / raw_dgf.abs() * 100
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    for ax, impr_df, title, label in [
+        (axes[0], egfr_impr, 'eGFR: % MSE Reduction — LOO ComBat vs Unharmonized', '% MSE Reduction'),
+        (axes[1], dgf_impr,  'DGF: % AUC Gain — LOO ComBat vs Unharmonized',       '% AUC Gain'),
+    ]:
+        lim = np.nanmax(np.abs(impr_df.values))
+        sns.heatmap(
+            impr_df,
+            annot=impr_df.applymap(lambda v: f'{v:+.1f}%'),
+            fmt='',
+            cmap='RdYlGn',
+            center=0,
+            vmin=-lim, vmax=lim,
+            cbar_kws={'label': label},
+            linewidths=0.5,
+            ax=ax,
+        )
+        ax.set_title(f'{title}\nGreen = ComBat better  |  Red = ComBat worse',
+                     fontsize=11, fontweight='bold')
+        ax.set_xlabel('Held-Out Test Cohort', fontsize=11)
+        ax.set_ylabel('Model', fontsize=11)
+        ax.tick_params(axis='x', rotation=20)
+
+    plt.tight_layout()
+    plt.savefig('results/figures/loo_improvement_heatmap.png', bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: loo_improvement_heatmap.png")
+else:
+    print("⚠ Raw baseline not found — skipping improvement heatmap")
+
+# ── 7. CKD Stage Distribution ────────────────────────────────
 if has_ckd:
     print("\n" + "=" * 60)
     print("GENERATING CKD STAGE DISTRIBUTION")
@@ -313,7 +413,7 @@ if has_ckd:
     plt.close()
     print("✓ Saved: ckd_stage_distribution.png")
 
-# ── 5. Permutation Importance ────────────────────────────────
+# ── 8. Permutation Importance ────────────────────────────────
 if has_importance:
     print("\n" + "=" * 60)
     print("GENERATING PERMUTATION IMPORTANCE PLOTS")
@@ -348,6 +448,8 @@ print("  - loo_heatmap.png")
 print("  - loo_avg_performance.png")
 print("  - loo_fold_comparison.png")
 print("  - loo_strategy_comparison.png")
+print("  - loo_improvement_vs_baselines.png")
+print("  - loo_improvement_heatmap.png")
 if has_ckd:        print("  - ckd_stage_distribution.png")
 if has_importance: print("  - permutation_importance.png")
 print("=" * 60)
