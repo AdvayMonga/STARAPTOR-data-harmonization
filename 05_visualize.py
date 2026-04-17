@@ -127,24 +127,22 @@ harmtrain_dgf  = get_loo_table('LOO Harm→Raw: {}', scenario_dgf_pivot)
 strat_avgs_egfr = {
     'Unharmonized': raw_egfr.mean(axis=1)       if raw_egfr       is not None else None,
     'LOO ComBat':   combat_egfr.mean(axis=1),
-    'Harm→Raw':     harmtrain_egfr.mean(axis=1) if harmtrain_egfr is not None else None,
 }
 strat_avgs_dgf = {
     'Unharmonized': raw_dgf.mean(axis=1)        if raw_dgf        is not None else None,
     'LOO ComBat':   combat_dgf.mean(axis=1),
-    'Harm→Raw':     harmtrain_dgf.mean(axis=1)  if harmtrain_dgf  is not None else None,
 }
-strat_colors = {'Unharmonized': '#e74c3c', 'LOO ComBat': '#3498db', 'Harm→Raw': '#f39c12'}
+strat_colors = {'Unharmonized': '#e74c3c', 'LOO ComBat': '#3498db'}
 
 models = combat_egfr.index.tolist()
 x = np.arange(len(models))
 n_strats = sum(v is not None for v in strat_avgs_egfr.values())
-bar_w = 0.25
+bar_w = 0.3
 
-fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+fig, axes = plt.subplots(1, 2, figsize=(13, 6))
 
 for ax, avgs, metric, better, fmt, ylim, use_log in [
-    (axes[0], strat_avgs_egfr, 'eGFR Test MSE', 'Lower', '.0f', None,        True),
+    (axes[0], strat_avgs_egfr, 'eGFR Test MSE', 'Lower', '.0f', None,        False),
     (axes[1], strat_avgs_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05), False),
 ]:
     i = 0
@@ -161,12 +159,9 @@ for ax, avgs, metric, better, fmt, ylim, use_log in [
                         xytext=(0, 4), textcoords='offset points',
                         ha='center', fontsize=8, fontweight='bold')
         i += 1
-    ax.set_xticks(x + bar_w)
+    ax.set_xticks(x + bar_w / 2)
     ax.set_xticklabels(models, rotation=20, ha='right', fontsize=10)
-    if use_log:
-        ax.set_ylabel(f'Avg {metric} (log10)', fontsize=11, fontweight='bold')
-    else:
-        ax.set_ylabel(f'Avg {metric} (across folds)', fontsize=11, fontweight='bold')
+    ax.set_ylabel(f'Avg {metric} (across folds)', fontsize=11, fontweight='bold')
     ax.set_title(f'{metric}: Strategy Comparison per Model\n({better} = Better  |  avg across 3 folds)',
                  fontsize=12, fontweight='bold')
     ax.legend(title='Strategy', fontsize=10)
@@ -345,40 +340,47 @@ print("\n" + "=" * 60)
 print("GENERATING PER-MODEL IMPROVEMENT HEATMAP")
 print("=" * 60)
 
-if raw_egfr is not None:
-    egfr_impr = (raw_egfr - combat_egfr) / raw_egfr * 100
-    dgf_impr  = (combat_dgf - raw_dgf)   / raw_dgf.abs() * 100
+methods_egfr = pd.read_csv('results/tables/archived/egfr_all_methods_summary.csv', index_col='Model')
+methods_dgf  = pd.read_csv('results/tables/archived/dgf_all_methods_summary.csv', index_col='Model')
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+harm_methods = ['Z-Score', 'RAVEL', 'CORAL', 'CovBat', 'ComBat']
 
-    for ax, impr_df, title, label in [
-        (axes[0], egfr_impr, 'eGFR: % MSE Reduction — LOO ComBat vs Unharmonized', '% MSE Reduction'),
-        (axes[1], dgf_impr,  'DGF: % AUC Gain — LOO ComBat vs Unharmonized',       '% AUC Gain'),
-    ]:
-        lim = np.nanmax(np.abs(impr_df.values))
-        sns.heatmap(
-            impr_df,
-            annot=impr_df.applymap(lambda v: f'{v:+.1f}%'),
-            fmt='',
-            cmap='RdYlGn',
-            center=0,
-            vmin=-lim, vmax=lim,
-            cbar_kws={'label': label},
-            linewidths=0.5,
-            ax=ax,
-        )
-        ax.set_title(f'{title}\nGreen = ComBat better  |  Red = ComBat worse',
-                     fontsize=11, fontweight='bold')
-        ax.set_xlabel('Held-Out Test Cohort', fontsize=11)
-        ax.set_ylabel('Model', fontsize=11)
-        ax.tick_params(axis='x', rotation=20)
+egfr_diff = pd.DataFrame(index=methods_egfr.index, columns=harm_methods)
+dgf_diff  = pd.DataFrame(index=methods_dgf.index,  columns=harm_methods)
+for method in harm_methods:
+    egfr_diff[method] = methods_egfr['Unharmonized'] - methods_egfr[method]
+    dgf_diff[method]  = methods_dgf[method] - methods_dgf['Unharmonized']
+egfr_diff = egfr_diff.astype(float)
+dgf_diff  = dgf_diff.astype(float)
 
-    plt.tight_layout()
-    plt.savefig('results/figures/loo_improvement_heatmap.png', bbox_inches='tight')
-    plt.close()
-    print("✓ Saved: loo_improvement_heatmap.png")
-else:
-    print("⚠ Raw baseline not found — skipping improvement heatmap")
+fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+for ax, diff_df, title, label, fmt_str in [
+    (axes[0], egfr_diff, 'eGFR: MSE Reduction vs Unharmonized', 'MSE Reduction', '+.0f'),
+    (axes[1], dgf_diff,  'DGF: AUC Gain vs Unharmonized',       'AUC Gain',      '+.3f'),
+]:
+    lim = np.nanmax(np.abs(diff_df.values))
+    sns.heatmap(
+        diff_df,
+        annot=diff_df.map(lambda v: f'{v:{fmt_str}}'),
+        fmt='',
+        cmap='RdYlGn',
+        center=0,
+        vmin=-lim, vmax=lim,
+        cbar_kws={'label': label},
+        linewidths=0.5,
+        ax=ax,
+    )
+    ax.set_title(f'{title}\nGreen = better  |  Red = worse',
+                 fontsize=11, fontweight='bold')
+    ax.set_xlabel('Harmonization Method', fontsize=11)
+    ax.set_ylabel('Model', fontsize=11)
+    ax.tick_params(axis='x', rotation=20)
+
+plt.tight_layout()
+plt.savefig('results/figures/loo_improvement_heatmap.png', bbox_inches='tight')
+plt.close()
+print("✓ Saved: loo_improvement_heatmap.png")
 
 # ── 7. CKD Stage Distribution ────────────────────────────────
 if has_ckd:
@@ -396,9 +398,9 @@ if has_ckd:
         x = np.arange(len(ckd_order))
         w = 0.35
         ax.bar(x - w/2, ckd_distribution[actual_col].values, w,
-               label='Actual', color='#3498db', edgecolor='black')
+               label='Actual', color='#2ecc71', edgecolor='black')
         ax.bar(x + w/2, ckd_distribution[pred_col].values, w,
-               label='Predicted', color='#e74c3c', edgecolor='black')
+               label='Predicted', color='#9b59b6', edgecolor='black')
         ax.set_xticks(x)
         ax.set_xticklabels(ckd_order, rotation=45, ha='right')
         ax.set_xlabel('CKD Stage', fontsize=12, fontweight='bold')
