@@ -238,25 +238,28 @@ df_scenario_combined.to_csv('results/tables/all_scenario_results.csv', index=Fal
 print("✓ Saved: all_scenario_results.csv")
 
 # Create comprehensive method results table
-method_results = []
-for group in df_method_egfr['Group'].unique():
-    for model in df_method_egfr['Model'].unique():
-        egfr_row = df_method_egfr[(df_method_egfr['Group'] == group) & (df_method_egfr['Model'] == model)]
-        dgf_row = df_method_dgf[(df_method_dgf['Group'] == group) & (df_method_dgf['Model'] == model)]
+if not df_method_egfr.empty and not df_method_dgf.empty:
+    method_results = []
+    for group in df_method_egfr['Group'].unique():
+        for model in df_method_egfr['Model'].unique():
+            egfr_row = df_method_egfr[(df_method_egfr['Group'] == group) & (df_method_egfr['Model'] == model)]
+            dgf_row = df_method_dgf[(df_method_dgf['Group'] == group) & (df_method_dgf['Model'] == model)]
 
-        if len(egfr_row) > 0 and len(dgf_row) > 0:
-            method_results.append({
-                'Method': group,
-                'Model': model,
-                'eGFR Train MSE': egfr_row['Train MSE'].values[0],
-                'eGFR Test MSE': egfr_row['Test MSE'].values[0],
-                'DGF Train AUC': dgf_row['Train AUC'].values[0],
-                'DGF Test AUC': dgf_row['Test AUC'].values[0],
-            })
+            if len(egfr_row) > 0 and len(dgf_row) > 0:
+                method_results.append({
+                    'Method': group,
+                    'Model': model,
+                    'eGFR Train MSE': egfr_row['Train MSE'].values[0],
+                    'eGFR Test MSE': egfr_row['Test MSE'].values[0],
+                    'DGF Train AUC': dgf_row['Train AUC'].values[0],
+                    'DGF Test AUC': dgf_row['Test AUC'].values[0],
+                })
 
-df_method_combined = pd.DataFrame(method_results)
-df_method_combined.to_csv('results/tables/all_method_results.csv', index=False)
-print("✓ Saved: all_method_results.csv")
+    df_method_combined = pd.DataFrame(method_results)
+    df_method_combined.to_csv('results/tables/all_method_results.csv', index=False)
+    print("✓ Saved: all_method_results.csv")
+else:
+    print("⚠ Skipping all_method_results.csv — pooled method results not loaded")
 
 # CKD STAGE DISTRIBUTION AND PERMUTATION IMPORTANCE
 print("\n" + "="*60)
