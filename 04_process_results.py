@@ -185,7 +185,31 @@ if 'Unharmonized' in method_egfr_avg.index and 'Unharmonized' in method_dgf_avg.
     print("\nDGF % Improvement by Model:")
     print(dgf_model_improve.round(1).to_string())
 else:
-    print("⚠ Skipping improvement tables - Unharmonized baseline not available")
+    print("⚠ Skipping pooled improvement tables - Unharmonized baseline not available")
+
+# LOO-only improvement variants (eGFR) — three baseline framings for the new heatmaps.
+# Runs independently of the pooled-method gate above, since it uses scenario data.
+loo_scenarios = ['UC → M', 'UM → C', 'CM → U']
+raw_cols    = [f'LOO Raw: {s}'    for s in loo_scenarios]
+combat_cols = [f'LOO ComBat: {s}' for s in loo_scenarios]
+if all(c in scenario_egfr_pivot.columns for c in raw_cols + combat_cols):
+    raw_pivot    = scenario_egfr_pivot[raw_cols].copy()
+    combat_pivot = scenario_egfr_pivot[combat_cols].copy()
+    raw_pivot.columns    = loo_scenarios
+    combat_pivot.columns = loo_scenarios
+
+    best_raw_per_scenario = raw_pivot.min(axis=0)
+
+    egfr_loo_reduction = raw_pivot - combat_pivot
+    egfr_loo_skill     = (best_raw_per_scenario - combat_pivot) / best_raw_per_scenario * 100
+
+    egfr_loo_reduction.to_csv('results/tables/egfr_loo_mse_reduction.csv')
+    egfr_loo_skill.to_csv('results/tables/egfr_loo_skill_vs_best_raw.csv')
+    raw_pivot.to_csv('results/tables/egfr_loo_raw_baseline_per_model.csv')
+    combat_pivot.to_csv('results/tables/egfr_loo_combat_per_model.csv')
+    print("✓ Saved LOO eGFR baseline-variant tables")
+else:
+    print("⚠ Skipping LOO eGFR variants — missing LOO Raw or LOO ComBat columns")
 
 # COMBINED RESULTS TABLES
 print("\n" + "="*60)

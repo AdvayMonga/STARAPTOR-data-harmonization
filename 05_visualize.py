@@ -382,6 +382,83 @@ plt.savefig('results/figures/loo_improvement_heatmap.png', bbox_inches='tight')
 plt.close()
 print("✓ Saved: loo_improvement_heatmap.png")
 
+# ── 6b. eGFR LOO Improvement — Three Baseline Variants ──────
+print("\n" + "=" * 60)
+print("GENERATING eGFR LOO BASELINE-VARIANT HEATMAPS")
+print("=" * 60)
+
+loo_scenarios = ['UC → M', 'UM → C', 'CM → U']
+raw_cols    = [f'LOO Raw: {s}'    for s in loo_scenarios]
+combat_cols = [f'LOO ComBat: {s}' for s in loo_scenarios]
+
+if all(c in scenario_egfr_pivot.columns for c in raw_cols + combat_cols):
+    raw_pivot    = scenario_egfr_pivot[raw_cols].copy()
+    combat_pivot = scenario_egfr_pivot[combat_cols].copy()
+    raw_pivot.columns    = loo_scenarios
+    combat_pivot.columns = loo_scenarios
+
+    best_raw_per_scenario = raw_pivot.min(axis=0)
+    best_raw_model        = raw_pivot.idxmin(axis=0)
+
+    reduction = raw_pivot - combat_pivot
+    skill     = (best_raw_per_scenario - combat_pivot) / best_raw_per_scenario * 100
+
+    def _sym_lim(df):
+        v = np.nanmax(np.abs(df.values))
+        return -v, v
+
+    # Variant A — current framing + Jeremy row annotation
+    fig, ax = plt.subplots(figsize=(8, 5))
+    annot_a = reduction.map(lambda v: f'{v:+.0f}')
+    raw_row_avg = raw_pivot.mean(axis=1)
+    row_labels = [f"{m}\n(avg LOO Raw = {raw_row_avg[m]:.0f})" for m in reduction.index]
+    vmin, vmax = _sym_lim(reduction)
+    sns.heatmap(reduction, annot=annot_a, fmt='', cmap='RdYlGn',
+                center=0, vmin=vmin, vmax=vmax,
+                cbar_kws={'label': 'MSE Reduction (Raw − ComBat)'},
+                linewidths=0.5, ax=ax,
+                yticklabels=row_labels)
+    ax.set_title('eGFR LOO: MSE Reduction (Raw − ComBat)\n'
+                 'Row label shows each model\'s avg LOO Raw MSE',
+                 fontsize=11, fontweight='bold')
+    ax.set_xlabel('LOO Scenario', fontsize=11)
+    ax.set_ylabel('Model', fontsize=11)
+    ax.tick_params(axis='y', rotation=0)
+    plt.tight_layout()
+    plt.savefig('results/figures/loo_improvement_heatmap_eGFR_current.png',
+                bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: loo_improvement_heatmap_eGFR_current.png")
+
+    # Variant B — skill score vs best LOO Raw (per scenario)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    annot_b = pd.DataFrame(index=skill.index, columns=skill.columns, dtype=object)
+    for m in skill.index:
+        for s in skill.columns:
+            annot_b.loc[m, s] = f'{skill.loc[m, s]:+.1f}%\n(MSE={combat_pivot.loc[m, s]:.0f})'
+    vmin, vmax = _sym_lim(skill)
+    sns.heatmap(skill, annot=annot_b, fmt='', cmap='RdYlGn',
+                center=0, vmin=vmin, vmax=vmax,
+                cbar_kws={'label': 'Skill Score (%)'},
+                linewidths=0.5, ax=ax)
+    baseline_line = '  |  '.join(
+        f"{s}: {best_raw_per_scenario[s]:.0f} ({best_raw_model[s]})"
+        for s in loo_scenarios
+    )
+    ax.set_title('eGFR LOO: Skill Score vs Best LOO Raw (per scenario)\n'
+                 f'Best LOO Raw — {baseline_line}',
+                 fontsize=11, fontweight='bold')
+    ax.set_xlabel('LOO Scenario', fontsize=11)
+    ax.set_ylabel('Model', fontsize=11)
+    ax.tick_params(axis='y', rotation=0)
+    plt.tight_layout()
+    plt.savefig('results/figures/loo_improvement_heatmap_eGFR_skill_vs_best_raw.png',
+                bbox_inches='tight')
+    plt.close()
+    print("✓ Saved: loo_improvement_heatmap_eGFR_skill_vs_best_raw.png")
+else:
+    print("⚠ Skipping eGFR LOO baseline variants — missing LOO columns in scenario summary")
+
 # ── 7. CKD Stage Distribution ────────────────────────────────
 if has_ckd:
     print("\n" + "=" * 60)
