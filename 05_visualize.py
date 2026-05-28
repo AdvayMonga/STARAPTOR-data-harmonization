@@ -6,6 +6,7 @@ All figures use the Leave-One-Cohort-Out ComBat strategy.
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as mpl_path_effects
 import seaborn as sns
 from pathlib import Path
 from scipy.stats import rankdata
@@ -16,6 +17,20 @@ plt.rcParams['savefig.dpi'] = 300
 plt.rcParams['font.size'] = 10
 
 Path("results/figures").mkdir(parents=True, exist_ok=True)
+
+
+def add_caption(fig, text, fontsize=9, bottom=None):
+    """Render a multi-line italic caption beneath a figure. Reserves space
+    via subplots_adjust so it doesn't collide with axis tick labels."""
+    n_lines = text.count('\n') + 1
+    if bottom is None:
+        # Roughly: room for x tick labels (~0.10) + caption lines.
+        bottom = 0.18 + 0.035 * n_lines
+    fig.subplots_adjust(bottom=bottom)
+    caption_y = 0.015
+    fig.text(0.5, caption_y, text, ha='center', va='bottom',
+             fontsize=fontsize, style='italic', color='#333333',
+             wrap=True, linespacing=1.35)
 
 # ── Load tables ──────────────────────────────────────────────
 print("=" * 60)
@@ -85,31 +100,39 @@ print("=" * 60)
 
 fig, axes = plt.subplots(1, 2, figsize=(13, 6))
 
-# eGFR heatmap (rank-colored, values annotated)
+# eGFR heatmap — absolute MSE colored, green = low. Clipped so Ridge tail
+# doesn't compress contrast between the interesting cells.
 ax = axes[0]
-egfr_ranks = pd.DataFrame(
-    rankdata(combat_egfr.values.flatten()).reshape(combat_egfr.shape),
-    index=combat_egfr.index, columns=combat_egfr.columns
-)
-sns.heatmap(egfr_ranks, annot=combat_egfr, fmt='.0f', cmap='viridis_r',
-            cbar=False, ax=ax, linewidths=0.5)
-ax.set_title('LOO ComBat — eGFR Test MSE\n(Lower / Lighter = Better, colors by rank)',
-             fontsize=12, fontweight='bold')
+egfr_best = float(combat_egfr.values.min())
+egfr_vmax = max(750.0, egfr_best * 2.0)
+sns.heatmap(combat_egfr.astype(float), annot=True, fmt='.0f', cmap='RdYlGn_r',
+            vmin=egfr_best, vmax=egfr_vmax,
+            cbar_kws={'label': 'Test MSE (lower = better)'},
+            ax=ax, linewidths=0.5)
+ax.set_title('eGFR Test MSE', fontsize=13, fontweight='bold')
 ax.set_xlabel('Held-Out Test Cohort', fontsize=11)
 ax.set_ylabel('Model', fontsize=11)
 ax.tick_params(axis='x', rotation=20)
 
-# DGF heatmap
+# DGF heatmap — AUC colored, green = high.
 ax = axes[1]
-sns.heatmap(combat_dgf, annot=True, fmt='.3f', cmap='viridis',
-            cbar=False, ax=ax, linewidths=0.5)
-ax.set_title('LOO ComBat — DGF Test AUC\n(Higher / Lighter = Better)',
-             fontsize=12, fontweight='bold')
+sns.heatmap(combat_dgf.astype(float), annot=True, fmt='.3f', cmap='RdYlGn',
+            vmin=0.45, vmax=float(combat_dgf.values.max()),
+            cbar_kws={'label': 'Test AUC (higher = better)'},
+            ax=ax, linewidths=0.5)
+ax.set_title('DGF Test AUC', fontsize=13, fontweight='bold')
 ax.set_xlabel('Held-Out Test Cohort', fontsize=11)
 ax.set_ylabel('Model', fontsize=11)
 ax.tick_params(axis='x', rotation=20)
 
+fig.suptitle('LOO ComBat Performance Across Held-Out Cohorts',
+             fontsize=15, fontweight='bold', y=1.02)
 plt.tight_layout()
+add_caption(fig,
+    "Each cell is one (model, held-out cohort) result under leave-one-cohort-out ComBat harmonization.\n"
+    f"Left panel: eGFR Test MSE (lower = better), color-scale clipped at MSE = {egfr_vmax:.0f} so the linear-model tail does not\n"
+    "compress contrast in the low-MSE region. Right panel: DGF Test AUC (higher = better), color-scale starts at 0.45 ≈ chance.\n"
+    "Cohorts: UC Davis (U), Coimbra (C), Mayo (M).")
 plt.savefig('results/figures/loo_heatmap.png', bbox_inches='tight')
 plt.close()
 print("✓ Saved: loo_heatmap.png")
@@ -161,15 +184,20 @@ for ax, avgs, metric, better, fmt, ylim, use_log in [
         i += 1
     ax.set_xticks(x + bar_w / 2)
     ax.set_xticklabels(models, rotation=20, ha='right', fontsize=10)
-    ax.set_ylabel(f'Avg {metric} (across folds)', fontsize=11, fontweight='bold')
-    ax.set_title(f'{metric}: Strategy Comparison per Model\n({better} = Better  |  avg across 3 folds)',
-                 fontsize=12, fontweight='bold')
+    ax.set_ylabel(f'Avg {metric}', fontsize=11, fontweight='bold')
+    ax.set_title(metric, fontsize=13, fontweight='bold')
     ax.legend(title='Strategy', fontsize=10)
     ax.grid(axis='y', alpha=0.3)
     if ylim:
         ax.set_ylim(ylim)
 
+fig.suptitle('Average Performance: Unharmonized vs LOO ComBat',
+             fontsize=15, fontweight='bold', y=1.02)
 plt.tight_layout()
+add_caption(fig,
+    "Bars show each model's average Test MSE (eGFR, left) or Test AUC (DGF, right) across the 3 LOO scenarios\n"
+    "(UC→M, UM→C, CM→U). Red bars = Unharmonized (LOO Raw) baseline. Blue bars = LOO ComBat harmonization.\n"
+    "Lower bars are better for eGFR (MSE); higher bars are better for DGF (AUC). Values printed above each bar.")
 plt.savefig('results/figures/loo_avg_performance.png', bbox_inches='tight')
 plt.close()
 print("✓ Saved: loo_avg_performance.png")
@@ -201,152 +229,38 @@ for ax, pivot, metric, better, fmt, ylim, use_log in [
         ax.set_ylabel(f'{metric} (log10)', fontsize=11, fontweight='bold')
     else:
         ax.set_ylabel(metric, fontsize=11, fontweight='bold')
-    ax.set_title(f'LOO ComBat — {metric} per Fold\n({better} = Better)',
-                 fontsize=13, fontweight='bold')
+    ax.set_title(metric, fontsize=13, fontweight='bold')
     ax.legend(title='Held-Out Cohort', fontsize=10)
     ax.grid(axis='y', alpha=0.3)
     if ylim:
         ax.set_ylim(ylim)
 
+fig.suptitle('LOO ComBat — Per-Fold Performance',
+             fontsize=15, fontweight='bold', y=1.00)
 plt.tight_layout()
+add_caption(fig,
+    "Bars within each model group show that model's Test MSE / AUC for the three LOO held-out cohorts: UC→M, UM→C, CM→U.\n"
+    "Top: eGFR Test MSE (log10 axis so Ridge's tail does not compress the rest). Bottom: DGF Test AUC on a linear axis.\n"
+    "All numbers are LOO ComBat (harmonized train, harmonized test). Lower = better for eGFR, higher = better for DGF.",
+    fontsize=8.5)
 plt.savefig('results/figures/loo_fold_comparison.png', bbox_inches='tight')
 plt.close()
 print("✓ Saved: loo_fold_comparison.png")
 
-# ── 4. Strategy Comparison: Raw vs ComBat vs Harm→Raw ────────
-print("\n" + "=" * 60)
-print("GENERATING LOO STRATEGY COMPARISON")
-print("=" * 60)
-
-raw_egfr      = get_loo_table('LOO Raw: {}',      scenario_egfr_pivot)
-harmtrain_egfr = get_loo_table('LOO Harm→Raw: {}', scenario_egfr_pivot)
-raw_dgf        = get_loo_table('LOO Raw: {}',      scenario_dgf_pivot)
-harmtrain_dgf  = get_loo_table('LOO Harm→Raw: {}', scenario_dgf_pivot)
-
-if raw_egfr is not None and harmtrain_egfr is not None:
-    fig, axes = plt.subplots(2, 1, figsize=(15, 11))
-
-    strategy_data_egfr = [
-        ('Unharmonized', raw_egfr,      '#e74c3c'),
-        ('LOO ComBat',   combat_egfr,   '#3498db'),
-        ('Harm→Raw',     harmtrain_egfr,'#f39c12'),
-    ]
-    strategy_data_dgf = [
-        ('Unharmonized', raw_dgf,       '#e74c3c'),
-        ('LOO ComBat',   combat_dgf,    '#3498db'),
-        ('Harm→Raw',     harmtrain_dgf, '#f39c12'),
-    ]
-
-    for ax, strat_data, metric, better, fmt, ylim, use_log in [
-        (axes[0], strategy_data_egfr, 'eGFR Test MSE', 'Lower', '.0f', None,        True),
-        (axes[1], strategy_data_dgf,  'DGF Test AUC',  'Higher', '.3f', (0, 1.05), False),
-    ]:
-        n_folds  = len(fold_labels)
-        fold_x = np.arange(n_folds)
-        bar_w  = 0.25
-
-        for i, (name, df, color) in enumerate(strat_data):
-            if df is None:
-                continue
-            avgs = df.mean(axis=0).values  # avg across models per fold
-            plot_vals = np.log10(avgs) if use_log else avgs
-            bars = ax.bar(fold_x + i * bar_w, plot_vals, bar_w,
-                          label=name, color=color, edgecolor='black', linewidth=0.5)
-            for bar, raw, pv in zip(bars, avgs, plot_vals):
-                ax.annotate(f'{raw:{fmt}}',
-                            xy=(bar.get_x() + bar.get_width() / 2, pv),
-                            xytext=(0, 4), textcoords='offset points',
-                            ha='center', fontsize=8, fontweight='bold')
-
-        ax.set_xticks(fold_x + bar_w)
-        ax.set_xticklabels(fold_labels, fontsize=10)
-        if use_log:
-            ax.set_ylabel(f'Avg {metric} (log10)', fontsize=11, fontweight='bold')
-        else:
-            ax.set_ylabel(f'Avg {metric} (across models)', fontsize=11, fontweight='bold')
-        ax.set_title(f'{metric}: Unharmonized vs LOO ComBat vs Harm→Raw\n({better} = Better)',
-                     fontsize=13, fontweight='bold')
-        ax.legend(title='Strategy', fontsize=10)
-        ax.grid(axis='y', alpha=0.3)
-        if ylim:
-            ax.set_ylim(ylim)
-
-    plt.tight_layout()
-    plt.savefig('results/figures/loo_strategy_comparison.png', bbox_inches='tight')
-    plt.close()
-    print("✓ Saved: loo_strategy_comparison.png")
-else:
-    print("⚠ Raw/Harm→Raw results not found — run 03_train_models.py first")
-
-# ── 5. % Improvement Over Baselines ──────────────────────────
-print("\n" + "=" * 60)
-print("GENERATING IMPROVEMENT VS BASELINES")
-print("=" * 60)
-
-if raw_egfr is not None and harmtrain_egfr is not None:
-    # eGFR: (baseline - combat) / baseline * 100  (lower MSE = better → positive = ComBat wins)
-    # DGF:  (combat - baseline) / |baseline| * 100 (higher AUC = better → positive = ComBat wins)
-    def pct_improve_egfr(baseline_df):
-        return ((baseline_df - combat_egfr) / baseline_df * 100).mean(axis=0)
-
-    def pct_improve_dgf(baseline_df):
-        return ((combat_dgf - baseline_df) / baseline_df.abs() * 100).mean(axis=0)
-
-    impr_data = [
-        ('vs Unharmonized', pct_improve_egfr(raw_egfr),       pct_improve_dgf(raw_dgf),       '#e74c3c'),
-        ('vs Harm→Raw',     pct_improve_egfr(harmtrain_egfr), pct_improve_dgf(harmtrain_dgf), '#f39c12'),
-    ]
-
-    fig, axes = plt.subplots(2, 1, figsize=(13, 10))
-
-    for ax, metric, getter_idx, better in [
-        (axes[0], 'eGFR % MSE Reduction vs Baseline', 0, 'Positive = ComBat has lower MSE'),
-        (axes[1], 'DGF % AUC Gain vs Baseline',       1, 'Positive = ComBat has higher AUC'),
-    ]:
-        n = len(impr_data)
-        fold_x = np.arange(len(fold_labels))
-        bar_w = 0.35
-
-        for i, (label, egfr_vals, dgf_vals, color) in enumerate(impr_data):
-            vals = egfr_vals.values if getter_idx == 0 else dgf_vals.values
-            bars = ax.bar(fold_x + i * bar_w, vals, bar_w,
-                          label=label, color=color, edgecolor='black', linewidth=0.5)
-            for bar, val in zip(bars, vals):
-                ax.annotate(f'{val:+.1f}%',
-                            xy=(bar.get_x() + bar.get_width() / 2,
-                                bar.get_height() if val >= 0 else 0),
-                            xytext=(0, 4 if val >= 0 else -14),
-                            textcoords='offset points',
-                            ha='center', fontsize=9, fontweight='bold')
-
-        ax.axhline(0, color='black', linewidth=1.0)
-        ax.set_xticks(fold_x + bar_w / 2)
-        ax.set_xticklabels(fold_labels, fontsize=10)
-        ax.set_ylabel('% Improvement', fontsize=11, fontweight='bold')
-        ax.set_title(f'{metric}\n({better}  |  averaged across models per fold)',
-                     fontsize=12, fontweight='bold')
-        ax.legend(title='Baseline', fontsize=10)
-        ax.grid(axis='y', alpha=0.3)
-
-    plt.tight_layout()
-    plt.savefig('results/figures/loo_improvement_vs_baselines.png', bbox_inches='tight')
-    plt.close()
-    print("✓ Saved: loo_improvement_vs_baselines.png")
-else:
-    print("⚠ Baseline results not found — skipping improvement chart")
-
-# ── 6. Per-Model Improvement Heatmap ─────────────────────────
+# ── 4. Per-Model Improvement Heatmap (LOO methods average) ──
 print("\n" + "=" * 60)
 print("GENERATING PER-MODEL IMPROVEMENT HEATMAP")
 print("=" * 60)
 
-methods_egfr = pd.read_csv('results/tables/archived/egfr_all_methods_summary.csv', index_col='Model')
-methods_dgf  = pd.read_csv('results/tables/archived/dgf_all_methods_summary.csv', index_col='Model')
+# LOO-averaged method summary (mean across UC→M, UM→C, CM→U).
+methods_egfr = pd.read_csv('results/tables/egfr_loo_method_avg.csv', index_col=0)
+methods_dgf  = pd.read_csv('results/tables/dgf_loo_method_avg.csv',  index_col=0)
 
-harm_methods = ['Z-Score', 'RAVEL', 'CORAL', 'CovBat', 'ComBat']
+# RAVEL is excluded — no LOO implementation in repo.
+harm_methods = [m for m in ['Z-Score', 'CORAL', 'CovBat', 'ComBat'] if m in methods_egfr.columns]
 
-egfr_diff = pd.DataFrame(index=methods_egfr.index, columns=harm_methods)
-dgf_diff  = pd.DataFrame(index=methods_dgf.index,  columns=harm_methods)
+egfr_diff = pd.DataFrame(index=methods_egfr.index, columns=harm_methods, dtype=float)
+dgf_diff  = pd.DataFrame(index=methods_dgf.index,  columns=harm_methods, dtype=float)
 for method in harm_methods:
     egfr_diff[method] = methods_egfr['Unharmonized'] - methods_egfr[method]
     dgf_diff[method]  = methods_dgf[method] - methods_dgf['Unharmonized']
@@ -356,8 +270,8 @@ dgf_diff  = dgf_diff.astype(float)
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
 for ax, diff_df, title, label, fmt_str in [
-    (axes[0], egfr_diff, 'eGFR: MSE Reduction vs Unharmonized', 'MSE Reduction', '+.0f'),
-    (axes[1], dgf_diff,  'DGF: AUC Gain vs Unharmonized',       'AUC Gain',      '+.3f'),
+    (axes[0], egfr_diff, 'eGFR MSE Reduction', 'MSE Reduction', '+.0f'),
+    (axes[1], dgf_diff,  'DGF AUC Gain',       'AUC Gain',      '+.3f'),
 ]:
     lim = np.nanmax(np.abs(diff_df.values))
     sns.heatmap(
@@ -371,95 +285,236 @@ for ax, diff_df, title, label, fmt_str in [
         linewidths=0.5,
         ax=ax,
     )
-    ax.set_title(f'{title}\nGreen = better  |  Red = worse',
-                 fontsize=11, fontweight='bold')
+    ax.set_title(title, fontsize=13, fontweight='bold')
     ax.set_xlabel('Harmonization Method', fontsize=11)
     ax.set_ylabel('Model', fontsize=11)
     ax.tick_params(axis='x', rotation=20)
 
+fig.suptitle('Harmonization Effect Across Methods',
+             fontsize=15, fontweight='bold', y=1.02)
 plt.tight_layout()
+add_caption(fig,
+    "Each cell averages results across the 3 LOO scenarios (UC→M, UM→C, CM→U).\n"
+    "Left: eGFR MSE reduction (Unharmonized − Method); positive (green) means harmonization lowered MSE.\n"
+    "Right: DGF AUC gain (Method − Unharmonized); positive (green) means harmonization raised AUC.\n"
+    "RAVEL is excluded — no LOO implementation in the repo. Symmetric ±max color scaling per panel.")
 plt.savefig('results/figures/loo_improvement_heatmap.png', bbox_inches='tight')
 plt.close()
 print("✓ Saved: loo_improvement_heatmap.png")
 
-# ── 6b. eGFR LOO Improvement — Three Baseline Variants ──────
-print("\n" + "=" * 60)
-print("GENERATING eGFR LOO BASELINE-VARIANT HEATMAPS")
-print("=" * 60)
+# ── 4a. eGFR Methods Heatmap — Two Baseline Variants ────────
+# Apply Variant A (annotated per-model baseline) and Variant B (skill vs best
+# Unharmonized) to the same models × methods data used above so Ridge no longer
+# looks like the biggest winner just because its Raw baseline is inflated.
+unharm  = methods_egfr['Unharmonized']
+best_un = unharm.min()
+best_un_model = unharm.idxmin()
+method_only_cols = [c for c in methods_egfr.columns if c != 'Unharmonized']
+method_only = methods_egfr[method_only_cols]
 
-loo_scenarios = ['UC → M', 'UM → C', 'CM → U']
-raw_cols    = [f'LOO Raw: {s}'    for s in loo_scenarios]
-combat_cols = [f'LOO ComBat: {s}' for s in loo_scenarios]
+reduction_methods_abs = methods_egfr[method_only_cols].rsub(unharm, axis=0)
+reduction_methods     = reduction_methods_abs.div(unharm, axis=0) * 100  # % reduction
+skill_methods         = (best_un - method_only) / best_un * 100
 
-if all(c in scenario_egfr_pivot.columns for c in raw_cols + combat_cols):
-    raw_pivot    = scenario_egfr_pivot[raw_cols].copy()
-    combat_pivot = scenario_egfr_pivot[combat_cols].copy()
-    raw_pivot.columns    = loo_scenarios
-    combat_pivot.columns = loo_scenarios
+def _sym_lim(df):
+    v = np.nanmax(np.abs(df.values))
+    return -v, v
 
-    best_raw_per_scenario = raw_pivot.min(axis=0)
-    best_raw_model        = raw_pivot.idxmin(axis=0)
+# Variant A — color by absolute final MSE (green=low, red=high) so the actually
+# best (model, method) cells dominate visually. Cell text shows both the final
+# MSE (color-determining) and the per-model % reduction for context.
+fig, ax = plt.subplots(figsize=(9, 5))
+annot_a = pd.DataFrame(index=method_only.index, columns=method_only.columns, dtype=object)
+for m in method_only.index:
+    for c in method_only.columns:
+        annot_a.loc[m, c] = f'MSE={method_only.loc[m, c]:.0f}\n({reduction_methods.loc[m, c]:+.1f}%)'
+row_labels = [f"{m}\n(Unharm avg = {unharm[m]:.0f})" for m in method_only.index]
+# Clip the upper end so Ridge's 900 doesn't drown out the tree-model contrast.
+best_mse = float(method_only.values.min())
+vmax_cap = max(750.0, best_mse * 2.0)
+sns.heatmap(method_only.astype(float), annot=annot_a, fmt='', cmap='RdYlGn_r',
+            vmin=best_mse, vmax=vmax_cap,
+            cbar_kws={'label': 'Avg Test MSE (lower = better)'},
+            linewidths=0.5, ax=ax, yticklabels=row_labels)
+ax.set_title('eGFR — Final MSE with % Improvement',
+             fontsize=14, fontweight='bold')
+ax.set_xlabel('Harmonization Method', fontsize=11)
+ax.set_ylabel('Model', fontsize=11)
+ax.tick_params(axis='y', rotation=0)
+plt.tight_layout()
+add_caption(fig,
+    "Cells colored by absolute final Test MSE (green = low, red = high), with color scale clipped at\n"
+    f"MSE = {vmax_cap:.0f} so Ridge/Lasso outliers do not compress contrast among the better cells.\n"
+    "Each cell labels the final method MSE and the % reduction vs. that model's own Unharmonized baseline.\n"
+    "Row labels show each model's avg Unharmonized MSE for reference. Averaged across 3 LOO scenarios.")
+plt.savefig('results/figures/loo_improvement_heatmap_methods_avg_current.png',
+            bbox_inches='tight')
+plt.close()
+print("✓ Saved: loo_improvement_heatmap_methods_avg_current.png")
 
-    reduction = raw_pivot - combat_pivot
-    skill     = (best_raw_per_scenario - combat_pivot) / best_raw_per_scenario * 100
+# Variant B — skill score vs best Unharmonized model (single shared baseline).
+# Clip the negative end so the positive cells (the actual harmonization wins)
+# don't get washed out by Ridge's deep negative tail.
+fig, ax = plt.subplots(figsize=(9, 5))
+annot_b = pd.DataFrame(index=skill_methods.index, columns=skill_methods.columns, dtype=object)
+for m in skill_methods.index:
+    for c in skill_methods.columns:
+        annot_b.loc[m, c] = f'{skill_methods.loc[m, c]:+.1f}%\n(MSE={method_only.loc[m, c]:.0f})'
+vmin_b, vmax_b = -60.0, 60.0
+sns.heatmap(skill_methods, annot=annot_b, fmt='', cmap='RdYlGn',
+            center=0, vmin=vmin_b, vmax=vmax_b,
+            cbar_kws={'label': 'Skill Score (%) — clipped at ±60%'},
+            linewidths=0.5, ax=ax)
+ax.set_title('eGFR — Skill Score vs Best Unharmonized',
+             fontsize=14, fontweight='bold')
+ax.set_xlabel('Harmonization Method', fontsize=11)
+ax.set_ylabel('Model', fontsize=11)
+ax.tick_params(axis='y', rotation=0)
+plt.tight_layout()
+add_caption(fig,
+    f"Single shared baseline = best Unharmonized model = {best_un_model} ({best_un:.0f} MSE).\n"
+    "Skill score = (best Unharmonized MSE − Method MSE) / best Unharmonized MSE × 100.\n"
+    "Positive (green) means this (model, method) cell beats the strongest unharmonized baseline. Cell text shows\n"
+    "skill score and final method MSE. Color scale clipped at ±60 %. Averaged across 3 LOO scenarios.")
+plt.savefig('results/figures/loo_improvement_heatmap_methods_avg_skill_vs_best_raw.png',
+            bbox_inches='tight')
+plt.close()
+print("✓ Saved: loo_improvement_heatmap_methods_avg_skill_vs_best_raw.png")
 
-    def _sym_lim(df):
-        v = np.nanmax(np.abs(df.values))
-        return -v, v
+# Variant C — absolute final MSE (green = lower). Mirrors the DGF panel's
+# "winners pop" effect because tree-based models + ComBat genuinely have the
+# lowest MSE across the grid; Ridge/Lasso rows are uniformly high so they
+# correctly read as worse without the baseline-inflation artifact.
+abs_mse = methods_egfr[['Unharmonized'] + method_only_cols]
+# Cap upper end of color scale so the Ridge tail doesn't compress the
+# interesting low-MSE contrast. Cells above the cap still read as deep red.
+best_mse  = float(abs_mse.values.min())
+vmax_cap  = max(750.0, best_mse * 2.0)
+fig, ax = plt.subplots(figsize=(10, 5))
+annot_c = abs_mse.map(lambda v: f'{v:.0f}')
+sns.heatmap(abs_mse.astype(float), annot=annot_c, fmt='', cmap='RdYlGn_r',
+            vmin=best_mse, vmax=vmax_cap,
+            cbar_kws={'label': 'Avg Test MSE (3 LOO scenarios)'},
+            linewidths=0.5, ax=ax)
+ax.set_title('eGFR — Final Test MSE by Model × Method',
+             fontsize=14, fontweight='bold')
+ax.set_xlabel('Harmonization Method', fontsize=11)
+ax.set_ylabel('Model', fontsize=11)
+ax.tick_params(axis='y', rotation=0)
+plt.tight_layout()
+add_caption(fig,
+    "Absolute final Test MSE for each (model, method) combination, including the Unharmonized baseline column.\n"
+    f"Color: green = low MSE (better), red = high. Scale clipped at MSE = {vmax_cap:.0f} so Ridge/Lasso outliers do not\n"
+    "compress contrast among the better cells. Mirrors the DGF AUC heatmap style: the actually-best (model, method)\n"
+    "combinations dominate visually. Averaged across 3 LOO scenarios.")
+plt.savefig('results/figures/loo_improvement_heatmap_methods_avg_absolute_mse.png',
+            bbox_inches='tight')
+plt.close()
+print("✓ Saved: loo_improvement_heatmap_methods_avg_absolute_mse.png")
 
-    # Variant A — current framing + Jeremy row annotation
-    fig, ax = plt.subplots(figsize=(8, 5))
-    annot_a = reduction.map(lambda v: f'{v:+.0f}')
-    raw_row_avg = raw_pivot.mean(axis=1)
-    row_labels = [f"{m}\n(avg LOO Raw = {raw_row_avg[m]:.0f})" for m in reduction.index]
-    vmin, vmax = _sym_lim(reduction)
-    sns.heatmap(reduction, annot=annot_a, fmt='', cmap='RdYlGn',
-                center=0, vmin=vmin, vmax=vmax,
-                cbar_kws={'label': 'MSE Reduction (Raw − ComBat)'},
-                linewidths=0.5, ax=ax,
-                yticklabels=row_labels)
-    ax.set_title('eGFR LOO: MSE Reduction (Raw − ComBat)\n'
-                 'Row label shows each model\'s avg LOO Raw MSE',
-                 fontsize=11, fontweight='bold')
-    ax.set_xlabel('LOO Scenario', fontsize=11)
-    ax.set_ylabel('Model', fontsize=11)
-    ax.tick_params(axis='y', rotation=0)
-    plt.tight_layout()
-    plt.savefig('results/figures/loo_improvement_heatmap_eGFR_current.png',
-                bbox_inches='tight')
-    plt.close()
-    print("✓ Saved: loo_improvement_heatmap_eGFR_current.png")
+# Variant D — slope plot (parallel coordinates). One line per model across
+# methods in order [Unharm → Z-Score → CORAL → CovBat → ComBat]. Y-axis = final
+# Test MSE. Vertical position shows totals; line slope shows improvement.
+method_order = ['Unharmonized', 'Z-Score', 'CORAL', 'CovBat', 'ComBat']
+slope_data = methods_egfr[method_order]
+fig, ax = plt.subplots(figsize=(10, 6))
+model_styles = {
+    # Linear family — warm reds/oranges
+    'Lasso':         {'color': '#d62728', 'marker': 's', 'family': 'Linear'},
+    'Ridge':         {'color': '#b34700', 'marker': 'D', 'family': 'Linear'},
+    'Elastic Net':   {'color': '#ff7f0e', 'marker': '^', 'family': 'Linear'},
+    # Tree family — cool blues/teals
+    'Random Forest': {'color': '#17becf', 'marker': 'o', 'family': 'Tree'},
+    'XGBoost':       {'color': '#1f77b4', 'marker': 'o', 'family': 'Tree'},
+}
+x = np.arange(len(method_order))
+for model in slope_data.index:
+    style = model_styles.get(model, {'color': 'gray', 'marker': 'o'})
+    y = slope_data.loc[model].values
+    ax.plot(x, y, marker=style['marker'], color=style['color'],
+            linewidth=2.2, markersize=9, label=model, alpha=0.9)
+    # Label endpoints
+    ax.annotate(f'{y[0]:.0f}', (x[0], y[0]), textcoords='offset points',
+                xytext=(-12, 0), ha='right', fontsize=8, color=style['color'])
+    ax.annotate(f'{y[-1]:.0f}', (x[-1], y[-1]), textcoords='offset points',
+                xytext=(12, 0), ha='left', fontsize=8, color=style['color'], fontweight='bold')
 
-    # Variant B — skill score vs best LOO Raw (per scenario)
-    fig, ax = plt.subplots(figsize=(8, 5))
-    annot_b = pd.DataFrame(index=skill.index, columns=skill.columns, dtype=object)
-    for m in skill.index:
-        for s in skill.columns:
-            annot_b.loc[m, s] = f'{skill.loc[m, s]:+.1f}%\n(MSE={combat_pivot.loc[m, s]:.0f})'
-    vmin, vmax = _sym_lim(skill)
-    sns.heatmap(skill, annot=annot_b, fmt='', cmap='RdYlGn',
-                center=0, vmin=vmin, vmax=vmax,
-                cbar_kws={'label': 'Skill Score (%)'},
-                linewidths=0.5, ax=ax)
-    baseline_line = '  |  '.join(
-        f"{s}: {best_raw_per_scenario[s]:.0f} ({best_raw_model[s]})"
-        for s in loo_scenarios
-    )
-    ax.set_title('eGFR LOO: Skill Score vs Best LOO Raw (per scenario)\n'
-                 f'Best LOO Raw — {baseline_line}',
-                 fontsize=11, fontweight='bold')
-    ax.set_xlabel('LOO Scenario', fontsize=11)
-    ax.set_ylabel('Model', fontsize=11)
-    ax.tick_params(axis='y', rotation=0)
-    plt.tight_layout()
-    plt.savefig('results/figures/loo_improvement_heatmap_eGFR_skill_vs_best_raw.png',
-                bbox_inches='tight')
-    plt.close()
-    print("✓ Saved: loo_improvement_heatmap_eGFR_skill_vs_best_raw.png")
-else:
-    print("⚠ Skipping eGFR LOO baseline variants — missing LOO columns in scenario summary")
+ax.set_xticks(x)
+ax.set_xticklabels(method_order, fontsize=11)
+ax.set_xlabel('Harmonization Method', fontsize=12, fontweight='bold')
+ax.set_ylabel('Avg Test MSE (log scale)', fontsize=12, fontweight='bold')
+ax.set_yscale('log')
+ax.set_title('eGFR — Model Trajectories Across Methods',
+             fontsize=14, fontweight='bold')
+ax.grid(axis='y', which='both', alpha=0.3)
+ax.legend(title='Model', loc='upper right', fontsize=10, framealpha=0.95)
+ax.margins(x=0.08)
+plt.tight_layout()
+add_caption(fig,
+    "Each line traces one model's average Test MSE across the 5 method conditions, left to right.\n"
+    "Warm colors = linear models (Lasso/Ridge/Elastic Net); cool colors = tree models (Random Forest/XGBoost).\n"
+    "Y-axis is log-scaled so the Ridge tail does not crush the lower band. Lower y = better; slope = harmonization effect.\n"
+    "Endpoint values labelled. Tree models reach their lowest MSE at ComBat. Averaged across 3 LOO scenarios.")
+plt.savefig('results/figures/loo_improvement_slope_methods_avg.png', bbox_inches='tight')
+plt.close()
+print("✓ Saved: loo_improvement_slope_methods_avg.png")
 
-# ── 7. CKD Stage Distribution ────────────────────────────────
+# Variant E — 3D bar chart. x=method, y=model, z=avg Test MSE.
+# Ordering: tallest bars at back, shortest in front to minimize occlusion.
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers projection)
+
+# Methods in conventional left-to-right order; model order keeps XGBoost in
+# front (so the smallest tree-model bars are closest to the viewer).
+bar_method_order = ['Unharmonized', 'Z-Score', 'CORAL', 'CovBat', 'ComBat']
+bar_model_order  = ['XGBoost', 'Random Forest', 'Elastic Net', 'Lasso', 'Ridge']
+Z = methods_egfr.loc[bar_model_order, bar_method_order].values.astype(float)
+
+fig = plt.figure(figsize=(13, 8))
+ax3d = fig.add_subplot(111, projection='3d')
+
+xs, ys = np.meshgrid(np.arange(len(bar_method_order)),
+                     np.arange(len(bar_model_order)))
+xpos = xs.ravel(); ypos = ys.ravel(); zpos = np.zeros_like(xpos, dtype=float)
+dx = dy = 0.6
+dz = Z.ravel()
+
+colors = []
+for m in bar_model_order:
+    for _ in bar_method_order:
+        colors.append(model_styles[m]['color'])
+
+ax3d.bar3d(xpos, ypos, zpos, dx, dy, dz, color=colors,
+           edgecolor='black', linewidth=0.4, alpha=0.92, shade=True)
+
+# Value labels on top of each bar — bold black with white halo for legibility.
+for x_, y_, z_ in zip(xpos, ypos, dz):
+    txt = ax3d.text(x_ + dx/2, y_ + dy/2, z_ + 35, f'{z_:.0f}',
+                    ha='center', va='bottom', fontsize=10, fontweight='bold',
+                    color='black', zorder=20)
+    txt.set_path_effects([
+        mpl_path_effects.Stroke(linewidth=2.5, foreground='white'),
+        mpl_path_effects.Normal()
+    ])
+
+ax3d.set_xticks(np.arange(len(bar_method_order)) + dx/2)
+ax3d.set_xticklabels(bar_method_order, fontsize=10, rotation=15, ha='right')
+ax3d.set_yticks(np.arange(len(bar_model_order)) + dy/2)
+ax3d.set_yticklabels(bar_model_order, fontsize=10)
+ax3d.set_zlabel('Avg Test MSE (lower = better)', fontsize=11, fontweight='bold')
+ax3d.set_title('eGFR — Model × Method Performance (3D)',
+               fontsize=14, fontweight='bold')
+ax3d.view_init(elev=24, azim=-60)
+plt.tight_layout()
+add_caption(fig,
+    "Bar height = avg Test MSE across 3 LOO scenarios (lower / shorter = better). Bars colored by model: warm = linear,\n"
+    "cool = tree. Model axis ordered so XGBoost sits in front (smallest values closest to the viewer).\n"
+    "Linear models (Ridge towering at the back) sit above tree models regardless of harmonization method.\n"
+    "ComBat brings the tree models to their lowest point. Value labels rendered with white halo for legibility.")
+plt.savefig('results/figures/loo_improvement_3d_methods_avg.png', bbox_inches='tight', dpi=200)
+plt.close()
+print("✓ Saved: loo_improvement_3d_methods_avg.png")
+
+# ── 5. CKD Stage Distribution ────────────────────────────────
 if has_ckd:
     print("\n" + "=" * 60)
     print("GENERATING CKD STAGE DISTRIBUTION")
@@ -468,7 +523,7 @@ if has_ckd:
     ckd_order = ckd_distribution['CKD_Stage'].tolist()
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-    for ax, actual_col, pred_col, title in [
+    for ax, actual_col, pred_col, panel in [
         (axes[0], 'Train_Actual', 'Train_Predicted', 'Training Set'),
         (axes[1], 'Test_Actual',  'Test_Predicted',  'Test Set'),
     ]:
@@ -482,17 +537,22 @@ if has_ckd:
         ax.set_xticklabels(ckd_order, rotation=45, ha='right')
         ax.set_xlabel('CKD Stage', fontsize=12, fontweight='bold')
         ax.set_ylabel('Count', fontsize=12, fontweight='bold')
-        ax.set_title(f'{title}: CKD Stage Distribution\nXGBoost — LOO ComBat (CM → U)',
-                     fontsize=13, fontweight='bold')
+        ax.set_title(panel, fontsize=13, fontweight='bold')
         ax.legend()
         ax.grid(axis='y', alpha=0.3)
 
+    fig.suptitle('CKD Stage Distribution — Actual vs Predicted',
+                 fontsize=15, fontweight='bold', y=1.02)
     plt.tight_layout()
+    add_caption(fig,
+        "Predictions come from the XGBoost regressor under LOO ComBat with the held-out cohort = UC Davis (Coimbra + Mayo → UC Davis).\n"
+        "eGFR predictions are bucketed into the standard CKD stages 1–5. Green bars = actual stage counts; purple = predicted.\n"
+        "Left: training set (Coimbra + Mayo). Right: held-out test set (UC Davis).")
     plt.savefig('results/figures/ckd_stage_distribution.png', bbox_inches='tight')
     plt.close()
     print("✓ Saved: ckd_stage_distribution.png")
 
-# ── 8. Permutation Importance ────────────────────────────────
+# ── 6. Permutation Importance ────────────────────────────────
 if has_importance:
     print("\n" + "=" * 60)
     print("GENERATING PERMUTATION IMPORTANCE PLOTS")
@@ -511,10 +571,15 @@ if has_importance:
         ax.set_yticklabels(top['Feature'].values, fontsize=9)
         ax.invert_yaxis()
         ax.set_xlabel('Permutation Importance (L1 Normalized)', fontsize=12, fontweight='bold')
-        ax.set_title(f'{outcome}: Top 20 Features\nXGBoost — LOO ComBat (CM → U)',
-                     fontsize=13, fontweight='bold')
+        ax.set_title(outcome, fontsize=13, fontweight='bold')
 
+    fig.suptitle('Top 20 Permutation-Importance Features',
+                 fontsize=15, fontweight='bold', y=1.02)
     plt.tight_layout()
+    add_caption(fig,
+        "Permutation importance computed for the XGBoost model under LOO ComBat with held-out cohort = UC Davis (CM→U).\n"
+        "Importances are L1-normalized so each panel sums to 1, then truncated to the top 20 features.\n"
+        "Left: eGFR regressor (predicting 12-month eGFR). Right: DGF classifier (predicting delayed graft function).")
     plt.savefig('results/figures/permutation_importance.png', bbox_inches='tight')
     plt.close()
     print("✓ Saved: permutation_importance.png")
@@ -526,9 +591,12 @@ print("=" * 60)
 print("  - loo_heatmap.png")
 print("  - loo_avg_performance.png")
 print("  - loo_fold_comparison.png")
-print("  - loo_strategy_comparison.png")
-print("  - loo_improvement_vs_baselines.png")
 print("  - loo_improvement_heatmap.png")
+print("  - loo_improvement_heatmap_methods_avg_current.png")
+print("  - loo_improvement_heatmap_methods_avg_skill_vs_best_raw.png")
+print("  - loo_improvement_heatmap_methods_avg_absolute_mse.png")
+print("  - loo_improvement_slope_methods_avg.png")
+print("  - loo_improvement_3d_methods_avg.png")
 if has_ckd:        print("  - ckd_stage_distribution.png")
 if has_importance: print("  - permutation_importance.png")
 print("=" * 60)

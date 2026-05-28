@@ -187,6 +187,47 @@ if 'Unharmonized' in method_egfr_avg.index and 'Unharmonized' in method_dgf_avg.
 else:
     print("⚠ Skipping pooled improvement tables - Unharmonized baseline not available")
 
+# LOO methods averaged across scenarios (eGFR + DGF) — for models × methods heatmap.
+# Methods covered: Unharmonized (Raw), Z-Score, CORAL, CovBat, ComBat.
+print("\n" + "="*60)
+print("BUILDING LOO METHOD × MODEL AVERAGES (across 3 LOO scenarios)")
+print("="*60)
+
+_LOO_SCENARIOS_KEYS = ['UC_to_M', 'UM_to_C', 'CM_to_U']
+_LOO_METHOD_SUFFIXES = {
+    'Unharmonized': '_raw',
+    'Z-Score':      '_zscore',
+    'CORAL':        '_coral',
+    'CovBat':       '_covbat',
+    'ComBat':       '',  # bare LOO file
+}
+
+def _avg_loo_method(outcome, value_col):
+    """Return DataFrame indexed by Model, columns = methods, values = mean across 3 LOO scenarios."""
+    out = {}
+    for method_label, suffix in _LOO_METHOD_SUFFIXES.items():
+        per_scenario = []
+        missing = False
+        for key in _LOO_SCENARIOS_KEYS:
+            path = f'results/tables/{outcome}_results_loo_{key}{suffix}.csv'
+            try:
+                df = pd.read_csv(path, index_col=0)
+            except FileNotFoundError:
+                missing = True
+                break
+            per_scenario.append(df[value_col])
+        if missing or not per_scenario:
+            continue
+        out[method_label] = pd.concat(per_scenario, axis=1).mean(axis=1)
+    return pd.DataFrame(out)
+
+egfr_loo_method_avg = _avg_loo_method('egfr', 'Test MSE')
+dgf_loo_method_avg  = _avg_loo_method('dgf',  'Test AUC')
+egfr_loo_method_avg.to_csv('results/tables/egfr_loo_method_avg.csv')
+dgf_loo_method_avg.to_csv('results/tables/dgf_loo_method_avg.csv')
+print(f"✓ Saved egfr_loo_method_avg.csv (shape {egfr_loo_method_avg.shape})")
+print(f"✓ Saved dgf_loo_method_avg.csv  (shape {dgf_loo_method_avg.shape})")
+
 # LOO-only improvement variants (eGFR) — three baseline framings for the new heatmaps.
 # Runs independently of the pooled-method gate above, since it uses scenario data.
 loo_scenarios = ['UC → M', 'UM → C', 'CM → U']
